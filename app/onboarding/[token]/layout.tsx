@@ -1,24 +1,87 @@
-import OnboardingHeader from "../../components/onboarding/OnboardingHeader";
-import { ReactNode } from "react";
+"use client";
 
-// 🔹 MOCK TOKEN
-const MOCK_TOKEN = "019b214f-03de-a7a4-b752-5e5c055a87fc";
+import { ReactNode, useEffect, useState } from "react";
+import OnboardingHeader from "../../components/onboarding/OnboardingHeader";
+import { useParams } from "next/navigation";
 
 type OnboardingLayoutProps = {
   children: ReactNode;
   params: {
-    token: "019b214f-03de-a7a4-b752-5e5c055a87fc";
+    token: string;
   };
 };
 
 export default function OnboardingLayout({
   children,
-  params,
 }: OnboardingLayoutProps) {
-  const { token } = params;
+  const { token } = useParams();
 
-  // ❌ Invalid token
-  if (token == MOCK_TOKEN) {
+  /**
+   * ✅ Initial state is DERIVED, not set in useEffect
+   * - null  → verifying
+   * - false → token missing or invalid
+   * - true  → valid
+   */
+  const [isValid, setIsValid] = useState<boolean | null>(
+    token ? null : false
+  );
+console.log("OnboardingLayout token:", token);
+  useEffect(() => {
+    // ⛔ No token → nothing to verify
+    if (!token) return;
+
+    let cancelled = false;
+
+    const verifyToken = async () => {
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/verify_token`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ raw_token: token }),
+            cache: "no-store",
+          }
+        );
+
+        if (!cancelled) {
+          setIsValid(res.ok);
+        }
+      } catch {
+        if (!cancelled) {
+          setIsValid(false);
+        }
+      }
+    };
+
+    verifyToken();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  /* ---------- LOADING ---------- */
+  if (isValid === null) {
+    return (
+      <div
+        style={{
+          height: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 16,
+        }}
+      >
+        Verifying onboarding link...
+      </div>
+    );
+  }
+
+  /* ---------- INVALID ---------- */
+  if (isValid === false) {
     return (
       <div
         style={{
@@ -35,7 +98,7 @@ export default function OnboardingLayout({
     );
   }
 
-  // ✅ Valid token
+  /* ---------- VALID ---------- */
   return (
     <>
       <OnboardingHeader />
