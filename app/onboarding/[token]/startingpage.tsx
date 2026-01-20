@@ -2,19 +2,20 @@
 
 import { ReactNode, useEffect, useState } from "react";
 import OnboardingHeader from "../../components/onboarding/OnboardingHeader";
-import { useParams } from "next/navigation";
 
-type OnboardingLayoutProps = {
-  children: ReactNode;
-  params: {
-    token: string;
-  };
-};
+
+// type OnboardingLayoutProps = {
+//   children: ReactNode;
+//   params: {
+//     token: string;
+//   };
+// };
 
 export default function OnboardingLayout({
   children,
-}: OnboardingLayoutProps) {
-  const { token } = useParams();
+  params,
+}: { children: ReactNode ; params: { token: string }; }) {
+  const  token  = params.token;
 
   /**
    * ✅ Initial state is DERIVED, not set in useEffect
