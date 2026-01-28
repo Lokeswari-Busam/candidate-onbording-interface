@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useOnboardingStore } from "@/app/store/useOnboardingStore";
-import type { IdentityDocument } from "@/app/store/useOnboardingStore";
+import { useLocalStorageForm } from "../hooks/localStorage";
 
 /* ===================== TYPES ===================== */
 
@@ -19,23 +18,44 @@ interface IdentityType {
   is_mandatory: boolean;
 }
 
+interface IdentityDocument {
+  identity_type_uuid: string;
+  identity_type_name: string;
+  identity_file_number: string;
+  fileName?: string;
+}
+
+
+interface IdentityDraft {
+  country_uuid: string;
+  documents: (IdentityDocument & { file?: File })[];
+}
+
+
 /* ===================== COMPONENT ===================== */
 
 export default function IdentityDocumentsPage() {
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
 
-  const { identity, setIdentity } = useOnboardingStore();
 
   const [countries, setCountries] = useState<Country[]>([]);
   const [identityTypes, setIdentityTypes] = useState<IdentityType[]>([]);
-  const [selectedCountry, setSelectedCountry] = useState<string>(
-    identity?.country_uuid ?? ""
-  );
 
-  const [documents, setDocuments] = useState<IdentityDocument[]>(
-    identity?.documents ?? []
-  );
+  // const [documents, setDocuments] = useState<IdentityDocument[]>(
+  //   identity?.documents ?? []
+  // );
+const [draft, setDraft] = useLocalStorageForm<IdentityDraft>(
+  `identity-details-${token}`,
+  {
+    country_uuid: "",
+    documents: [],
+  }
+);
+
+const selectedCountry = draft.country_uuid;
+const documents = draft.documents;
+
 
   const [error, setError] = useState("");
 
@@ -45,7 +65,9 @@ export default function IdentityDocumentsPage() {
     fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/masters/country`)
       .then((res) => res.json())
       .then((data: Country[]) =>
-        setCountries((Array.isArray(data) ? data : []).filter((c) => c.is_active))
+        setCountries(
+          (Array.isArray(data) ? data : []).filter((c) => c.is_active),
+        ),
       )
       .catch(() => setError("Unable to load countries"));
   }, []);
@@ -56,7 +78,7 @@ export default function IdentityDocumentsPage() {
     if (!selectedCountry) return;
 
     fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/identity/country-mapping/identities/${selectedCountry}`
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/identity/country-mapping/identities/${selectedCountry}`,
     )
       .then((res) => res.json())
       .then((data: IdentityType[]) => {
@@ -65,7 +87,7 @@ export default function IdentityDocumentsPage() {
 
         if (mandatory.length < 2) {
           setError(
-            "This country must have at least 2 mandatory identity documents. Please contact HR."
+            "This country must have at least 2 mandatory identity documents. Please contact HR.",
           );
         } else {
           setError("");
@@ -78,96 +100,93 @@ export default function IdentityDocumentsPage() {
 
   /* ===================== FILE HANDLING ===================== */
 
-  const handleFileChange = (
-    identityType: IdentityType,
-    file?: File
-  ) => {
-    if (!file) return;
+  
+    const handleFileChange = (identityType: IdentityType, file?: File) => {
+  if (!file) return;
 
-    setDocuments((prev) => {
-      const existing = prev.find(
-        (d) => d.identity_type_uuid === identityType.identity_type_uuid
-      );
+  setDraft((prev) => {
+    const existing = prev.documents.find(
+      (d) => d.identity_type_uuid === identityType.identity_type_uuid
+    );
 
-      if (existing) {
-        return prev.map((d) =>
+    const updatedDocs = existing
+      ? prev.documents.map((d) =>
           d.identity_type_uuid === identityType.identity_type_uuid
             ? { ...d, file }
             : d
-        );
-      }
+        )
+      : [
+          ...prev.documents,
+          {
+            identity_type_uuid: identityType.identity_type_uuid,
+            identity_type_name: identityType.identity_type_name,
+            identity_file_number: "",
+            file,
+          },
+        ];
 
-      return [
-        ...prev,
-        {
-          identity_type_uuid: identityType.identity_type_uuid,
-          identity_type_name: identityType.identity_type_name,
-          file,
-          identity_file_number: "",
-        },
-      ];
-    });
-  };
+    return { ...prev, documents: updatedDocs };
+  });
+};
+
 
   /* ===================== IDENTITY NUMBER HANDLING (NEW) ===================== */
 
   const handleIdentityNumberChange = (
-    identityType: IdentityType,
-    value: string
-  ) => {
-    setDocuments((prev) => {
-      const existing = prev.find(
-        (d) => d.identity_type_uuid === identityType.identity_type_uuid
-      );
+  identityType: IdentityType,
+  value: string
+) => {
+  setDraft((prev) => {
+    const existing = prev.documents.find(
+      (d) => d.identity_type_uuid === identityType.identity_type_uuid
+    );
 
-      if (existing) {
-        return prev.map((d) =>
+    const updatedDocs = existing
+      ? prev.documents.map((d) =>
           d.identity_type_uuid === identityType.identity_type_uuid
             ? { ...d, identity_file_number: value }
             : d
-        );
-      }
+        )
+      : [
+          ...prev.documents,
+          {
+            identity_type_uuid: identityType.identity_type_uuid,
+            identity_type_name: identityType.identity_type_name,
+            identity_file_number: value,
+            file: undefined as unknown as File,
+          },
+        ];
 
-      return [
-        ...prev,
-        {
-          identity_type_uuid: identityType.identity_type_uuid,
-          identity_type_name: identityType.identity_type_name,
-          identity_file_number: value,
-          file: undefined as unknown as File,
-        },
-      ];
-    });
-  };
+    return { ...prev, documents: updatedDocs };
+  });
+};
+
+      
 
   /* ===================== CONTINUE ===================== */
 
   const handleContinue = () => {
-    const mandatoryDocs = identityTypes.filter((d) => d.is_mandatory);
+  const mandatoryDocs = identityTypes.filter((d) => d.is_mandatory);
 
-    if (mandatoryDocs.length < 2) {
-      setError("Minimum 2 mandatory identity documents are required.");
-      return;
-    }
+  const uploadedMandatory = mandatoryDocs.every((doc) =>
+    documents.some(
+      (d) =>
+        d.identity_type_uuid === doc.identity_type_uuid &&
+        d.identity_file_number?.trim() &&
+        d.file
+    )
+  );
 
-    const uploadedMandatory = mandatoryDocs.every((doc) =>
-      documents.some(
-        (d) => d.identity_type_uuid === doc.identity_type_uuid
-      )
-    );
+  if (!uploadedMandatory) {
+    setError("Please upload all mandatory identity documents.");
+    return;
+  }
 
-    if (!uploadedMandatory) {
-      setError("Please upload all mandatory identity documents.");
-      return;
-    }
+  // later: POST draft to backend here
 
-    setIdentity({
-      country_uuid: selectedCountry,
-      documents,
-    });
-
-    router.push(`/onboarding/${token}/education-details`);
-  };
+  // 🔥 clears localStorage only after success
+  router.push(`/onboarding/${token}/education-details`);
+};
 
   /* ===================== UI ===================== */
 
@@ -180,8 +199,10 @@ export default function IdentityDocumentsPage() {
           <select
             value={selectedCountry}
             onChange={(e) => {
-              setSelectedCountry(e.target.value);
-              setDocuments([]);
+              setDraft({
+                country_uuid: e.target.value,
+                documents: [],
+              })
             }}
             style={inputStyle}
           >
@@ -207,7 +228,7 @@ export default function IdentityDocumentsPage() {
                 placeholder={`${doc.identity_type_name} Number`}
                 value={
                   documents.find(
-                    (d) => d.identity_type_uuid === doc.identity_type_uuid
+                    (d) => d.identity_type_uuid === doc.identity_type_uuid,
                   )?.identity_file_number || ""
                 }
                 onChange={(e) =>
@@ -223,23 +244,21 @@ export default function IdentityDocumentsPage() {
                   <input
                     type="file"
                     hidden
-                    onChange={(e) =>
-                      handleFileChange(doc, e.target.files?.[0])
-                    }
+                    onChange={(e) => handleFileChange(doc, e.target.files?.[0])}
                   />
                 </label>
                 <span style={fileNameText}>
                   {documents.find(
-                    (d) => d.identity_type_uuid === doc.identity_type_uuid
+                    (d) => d.identity_type_uuid === doc.identity_type_uuid,
                   )?.file?.name || "No file chosen"}
                 </span>
               </div>
 
               {documents.some(
-                (d) => d.identity_type_uuid === doc.identity_type_uuid
+                (d) => d.identity_type_uuid === doc.identity_type_uuid,
               ) && (
                 <div style={{ fontSize: 12, color: "green", marginTop: 4 }}>
-                  ✓ Uploaded
+                  
                 </div>
               )}
             </Field>
@@ -250,9 +269,7 @@ export default function IdentityDocumentsPage() {
         <div style={footer}>
           <button
             type="button"
-            onClick={() =>
-              router.push(`/onboarding/${token}/address-details`)
-            }
+            onClick={() => router.push(`/onboarding/${token}/address-details`)}
             style={backBtn}
           >
             ← Back

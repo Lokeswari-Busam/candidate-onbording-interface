@@ -73,7 +73,7 @@ console.log("OnboardingLayout token:", token);
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: 16,
+          fontSize: 22,
         }}
       >
         Verifying onboarding link...
@@ -91,7 +91,7 @@ console.log("OnboardingLayout token:", token);
           alignItems: "center",
           justifyContent: "center",
           color: "red",
-          fontSize: 18,
+          fontSize: 22,
         }}
       >
         Invalid or expired onboarding link
