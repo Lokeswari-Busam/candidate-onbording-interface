@@ -92,7 +92,7 @@ export default function IdentityDocumentsPage() {
 
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/identity`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/identity-documents`,
         {
           method: "POST",
           body: formData,
