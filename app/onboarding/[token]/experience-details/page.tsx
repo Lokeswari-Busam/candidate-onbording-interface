@@ -44,9 +44,7 @@ export default function ExperienceDetailsPage() {
     `experience-details-${token}`,
     []
   );
-
-  
-
+    
   const addExperience = () => {
     const newExp: ExperienceDetails = {
       company_name: "",

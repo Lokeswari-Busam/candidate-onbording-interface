@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLocalStorageForm } from "../hooks/localStorage";
+import toast from "react-hot-toast";
 /* ===================== TYPES ===================== */
 
 interface Country {
@@ -62,7 +63,13 @@ const [draft, setDraft  ] = useLocalStorageForm<AddressDraft>(
 const permanent = draft.permanent;
 const temporary = draft.temporary;
 
+const [originalDraft, setOriginalDraft] = useState<AddressDraft | null>(null);
+const [permanentUuid, setPermanentUuid] = useState<string | null>(null);
+const [temporaryUuid, setTemporaryUuid] = useState<string | null>(null);
 
+function isEqual(a: AddressForm, b: AddressForm) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
   /* ---------------- FETCH COUNTRIES ---------------- */
 
@@ -116,10 +123,129 @@ const temporary = draft.temporary;
   }
 };
 
-  const handleContinue = () => {
+useEffect(() => {
+  if (!token) return;
+
+  const loadAddresses = async () => {
+    try {
+      const tokenRes = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`,
+      );
+      if (!tokenRes.ok) throw new Error();
+
+      const user_uuid: string = await tokenRes.json();
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/address/${user_uuid}`,
+      );
+
+      // If backend doesn't have data yet, just continue silently
+      if (!res.ok) return;
+
+      const data = await res.json();
+
+      const mapped: AddressDraft = {
+        permanent: data.permanent || emptyAddress,
+        temporary: data.temporary || emptyAddress,
+      };
+
+      setOriginalDraft(mapped);
+      setDraft(mapped);
+
+      setPermanentUuid(data.permanent?.address_uuid || null);
+      setTemporaryUuid(data.temporary?.address_uuid || null);
+    } catch {
+      // ❌ Do NOT show error for address prefill
+      // This just means "no existing data"
+    }
+  };
+
+  loadAddresses();
+}, [token, setDraft]);
+
+
+
+  const handleContinue = async () => {
+  setError("");
+
+  try {
+    const tokenRes = await fetch(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`,
+    );
+    if (!tokenRes.ok) throw new Error();
+
+    const user_uuid: string = await tokenRes.json();
+
+    const saveAddress = async (
+      type: "permanent" | "temporary",
+      current: AddressForm,
+      original: AddressForm | null,
+      uuid: string | null,
+    ) => {
+      const payload = {
+        user_uuid,
+        address_type: type,
+        ...current,
+      };
+
+      if (!original) {
+        // POST
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/address`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          },
+        );
+        if (!res.ok) throw new Error();
+        toast.success(`${type} address saved`);
+      } else if (!isEqual(original, current) && uuid) {
+        // PUT
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/address/${uuid}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          },
+        );
+        if (!res.ok) throw new Error();
+        toast.success(`${type} address updated`);
+      }
+    };
+
+    await saveAddress(
+      "permanent",
+      permanent,
+      originalDraft?.permanent || null,
+      permanentUuid,
+    );
+
+    if (!sameAsPermanent) {
+      await saveAddress(
+        "temporary",
+        temporary,
+        originalDraft?.temporary || null,
+        temporaryUuid,
+      );
+    }
+
+    if (
+      originalDraft &&
+      isEqual(originalDraft.permanent, permanent) &&
+      (sameAsPermanent ||
+        isEqual(originalDraft.temporary, temporary))
+    ) {
+      toast("No changes detected. Moving to next step.");
+    }
 
     router.push(`/onboarding/${token}/identity-documents`);
-  };
+  } catch {
+    toast.error("Failed to save address details");
+    setError("Failed to save address details");
+  }
+};
 
   /* ===================== UI ===================== */
 

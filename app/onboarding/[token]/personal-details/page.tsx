@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLocalStorageForm } from "../hooks/localStorage";
+import  toast from "react-hot-toast";
 
 
 /* ===================== TYPES ===================== */
@@ -58,6 +59,8 @@ export default function PersonalDetailsPage() {
   const [offer, setOffer] = useState<OfferLetter | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [originalData, setOriginalData] = useState<PersonalForm | null>(null);
+  const [personalUuid, setPersonalUuid] = useState<string | null>(null);
 
   /* ---------------- FORM STATE ---------------- */
 
@@ -90,6 +93,7 @@ export default function PersonalDetailsPage() {
   /* ---------------- TOKEN → USER → OFFER ---------------- */
 
   useEffect(() => {
+    if (!token) return;
   const loadOfferDetails = async () => {
     try {
       const tokenRes = await fetch(
@@ -106,15 +110,42 @@ export default function PersonalDetailsPage() {
 
       const offerData: OfferLetter = await offerRes.json();
       setOffer(offerData);
+
+       // 🔹 Fetch existing personal details
+      const personalRes = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/${user_uuid}`,
+      );
+
+      if (personalRes.ok) {
+        const data = await personalRes.json();
+
+        setPersonalUuid(data.personal_uuid); // if backend returns it
+        const mapped: PersonalForm = {
+          date_of_birth: data.date_of_birth || "",
+          gender: data.gender || "",
+          marital_status: data.marital_status || "",
+          blood_group: data.blood_group || "",
+          nationality_country_uuid: data.nationality_country_uuid || "",
+          residence_country_uuid: data.residence_country_uuid || "",
+          emergency_country_uuid: data.emergency_country_uuid || "",
+          emergency_contact: data.emergency_contact || "",
+        };
+        setOriginalData(mapped);
+        setFormData(mapped);
+      }
     } catch {
-      setError("Invalid or expired onboarding link");
+      setError("Failed to load offer details. Please check your token.");
     }
   };
 
-  if (token) {
-    loadOfferDetails();
-  }
-}, [token]);
+  loadOfferDetails();
+  }, 
+  [token, setFormData]);
+
+    function isEqual(a: PersonalForm, b: PersonalForm) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 
 
   /* ---------------- HANDLERS ---------------- */
@@ -126,12 +157,65 @@ export default function PersonalDetailsPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+     setError("");
 
+  try {
+    if (!offer) {
+      setLoading(false);
+      return;
+    }
+    const payload = {
+      user_uuid: offer.user_uuid,
+      date_of_birth: formData.date_of_birth,
+      gender: formData.gender,
+      marital_status: formData.marital_status,
+      blood_group: formData.blood_group,
+      nationality_country_uuid: formData.nationality_country_uuid,
+      residence_country_uuid: formData.residence_country_uuid,
+      emergency_country_uuid: formData.emergency_country_uuid,
+      emergency_contact: formData.emergency_contact,
+    };
+    // Case 1: Empty DB → POST
+    if (!originalData) {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/personal-details`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      if (!res.ok) throw new Error();
+      toast.success("Personal details saved successfully");
+    }
+    // Case 2: Exists & changed → PUT
+    else if (!isEqual(originalData, formData) && personalUuid) {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/${personalUuid}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      if (!res.ok) throw new Error();
+      toast.success("Personal details updated successfully");
+    }
+    // Case 3: Exists & unchanged → no API call
+    else{
+      toast.success("No changes detected. Moving to next step.");
+    }
     router.push(`/onboarding/${token}/address-details`);
-  };
+  } catch {
+    toast.error("Failed to save personal details");
+    setError("Failed to save personal details");
+  } finally {
+    setLoading(false);
+  }
+};
 
   /* ===================== UI ===================== */
 
@@ -203,6 +287,8 @@ export default function PersonalDetailsPage() {
               <option value="">Select</option>
               <option>Single</option>
               <option>Married</option>
+          
+
             </select>
           </Field>
 
@@ -220,6 +306,9 @@ export default function PersonalDetailsPage() {
               <option>B+</option>
               <option>O+</option>
               <option>AB+</option>
+              <option>B-</option>
+              <option>O-</option>
+              <option>AB-</option>
             </select>
           </Field>
 
