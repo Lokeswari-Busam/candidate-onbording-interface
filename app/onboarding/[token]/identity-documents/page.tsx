@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLocalStorageForm } from "../hooks/localStorage";
+import toast from "react-hot-toast";
 
 /* ===================== TYPES ===================== */
 
@@ -41,23 +42,35 @@ export default function IdentityDocumentsPage() {
 
   const [countries, setCountries] = useState<Country[]>([]);
   const [identityTypes, setIdentityTypes] = useState<IdentityType[]>([]);
-
-  // const [documents, setDocuments] = useState<IdentityDocument[]>(
-  //   identity?.documents ?? []
-  // );
-const [draft, setDraft] = useLocalStorageForm<IdentityDraft>(
+  const [draft, setDraft] = useLocalStorageForm<IdentityDraft>(
   `identity-details-${token}`,
   {
     country_uuid: "",
     documents: [],
   }
-);
+  );
+  const selectedCountry = draft.country_uuid;
+  const documents = draft.documents;
+  type ExistingDoc = {
+  identity_uuid: string;
+  identity_type_uuid: string;
+  identity_file_number: string;
+};
 
-const selectedCountry = draft.country_uuid;
-const documents = draft.documents;
-
+  const [originalDocs, setOriginalDocs] = useState<
+    Record<string, ExistingDoc>
+  >({});
+  
 
   const [error, setError] = useState("");
+
+  function isDocEqual(
+  a: IdentityDocument & { file?: File },
+  b: ExistingDoc
+) {
+  return a.identity_file_number === b.identity_file_number && !a.file;
+}
+
 
   /* ===================== FETCH COUNTRIES ===================== */
 
@@ -97,6 +110,49 @@ const documents = draft.documents;
       })
       .catch(() => setError("Unable to load identity documents"));
   }, [selectedCountry]);
+
+  useEffect(() => {
+  if (!token) return;
+
+  (async () => {
+    try {
+      // Resolve user_uuid
+      const tokenRes = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`
+      );
+      if (!tokenRes.ok) throw new Error();
+      const user_uuid: string = await tokenRes.json();
+
+      // Fetch existing identity docs for this user
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/identity-documents/${user_uuid}`
+      );
+      if (!res.ok) throw new Error();
+
+      const data: ExistingDoc[] = await res.json();
+
+      // Normalize into lookup map
+      const map: Record<string, ExistingDoc> = {};
+      data.forEach((d) => {
+        map[d.identity_type_uuid] = d;
+      });
+
+      setOriginalDocs(map);
+
+      // Optional: prefill numbers into draft
+      setDraft((prev) => ({
+        ...prev,
+        documents: data.map((d) => ({
+          identity_type_uuid: d.identity_type_uuid,
+          identity_type_name: "",
+          identity_file_number: d.identity_file_number,
+        })),
+      }));
+    } catch {
+      // First-time user – no existing data
+    }
+  })();
+}, [token, setDraft]);
 
   /* ===================== FILE HANDLING ===================== */
 
@@ -165,28 +221,98 @@ const documents = draft.documents;
 
   /* ===================== CONTINUE ===================== */
 
-  const handleContinue = () => {
+//   const handleContinue = () => {
+//   const mandatoryDocs = identityTypes.filter((d) => d.is_mandatory);
+
+//   const uploadedMandatory = mandatoryDocs.every((doc) =>
+//     documents.some(
+//       (d) =>
+//         d.identity_type_uuid === doc.identity_type_uuid &&
+//         d.identity_file_number?.trim() &&
+//         d.file
+//     )
+//   );
+//   if (!uploadedMandatory) {
+//     setError("Please upload all mandatory identity documents.");
+//     return;
+//   }
+//   // later: POST draft to backend here
+//   // 🔥 clears localStorage only after success
+//   router.push(`/onboarding/${token}/education-details`);
+// };
+
+  const handleContinue = async () => {
   const mandatoryDocs = identityTypes.filter((d) => d.is_mandatory);
 
-  const uploadedMandatory = mandatoryDocs.every((doc) =>
+  // Basic draft validation (numbers only)
+  const numbersOk = mandatoryDocs.every((doc) =>
     documents.some(
       (d) =>
         d.identity_type_uuid === doc.identity_type_uuid &&
-        d.identity_file_number?.trim() &&
-        d.file
+        d.identity_file_number?.trim()
     )
   );
 
-  if (!uploadedMandatory) {
-    setError("Please upload all mandatory identity documents.");
+  if (!numbersOk) {
+    setError("Please fill all mandatory identity numbers.");
     return;
   }
 
-  // later: POST draft to backend here
+  try {
+    const tokenRes = await fetch(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`
+    );
+    if (!tokenRes.ok) throw new Error();
+    const user_uuid: string = await tokenRes.json();
 
-  // 🔥 clears localStorage only after success
-  router.push(`/onboarding/${token}/education-details`);
+    for (const doc of documents) {
+      const existing = originalDocs[doc.identity_type_uuid];
+
+      const form = new FormData();
+      form.append("mapping_uuid", doc.identity_type_uuid);
+      form.append("user_uuid", user_uuid);
+      form.append("identity_file_number", doc.identity_file_number);
+      if (doc.file) form.append("file", doc.file);
+
+      // 1️⃣ CREATE
+      if (!existing) {
+        if (!doc.file) {
+          setError(`Please upload ${doc.identity_type_name}`);
+          return;
+        }
+
+        await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/identity-documents`,
+          { method: "POST", body: form }
+        );
+        toast.success(`${doc.identity_type_name} created`);
+      }
+
+      // 2️⃣ UPDATE
+      else if (!isDocEqual(doc, existing)) {
+        if (!doc.file && doc.identity_file_number !== existing.identity_file_number) {
+          setError(`Please re-upload ${doc.identity_type_name}`);
+          return;
+        }
+
+        await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/identity-documents/${existing.identity_uuid}`,
+          { method: "PUT", body: form }
+        );
+        toast.success(`${doc.identity_type_name} updated`);
+      }
+
+      // 3️⃣ SKIP – unchanged
+    }
+
+    router.push(`/onboarding/${token}/education-details`);
+  } catch {
+    toast.error("Failed to save identity documents");
+    setError("Failed to save identity documents");
+  }
 };
+
+  
 
   /* ===================== UI ===================== */
 
