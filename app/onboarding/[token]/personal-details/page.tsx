@@ -130,37 +130,7 @@ export default function PersonalDetailsPage() {
     e.preventDefault();
     setLoading(true);
 
-<<<<<<< HEAD
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/personal-details`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            user_uuid,
-            ...formData,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to save personal details");
-      }
-
-      router.push(`/onboarding/${token}/address-details`);
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Something went wrong");
-      }
-    } finally {
-      setLoading(false);
-    }
-=======
     router.push(`/onboarding/${token}/address-details`);
->>>>>>> b884d4bda35897b891c62480c0ef3509504fca71
   };
 
   /* ===================== UI ===================== */
