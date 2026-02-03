@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLocalStorageForm } from "../hooks/localStorage";
 import  toast from "react-hot-toast";
+import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
+
 
 
 /* ===================== TYPES ===================== */
@@ -25,6 +27,14 @@ interface OfferLetter {
 }
 
 interface PersonalForm {
+
+  user_uuid?: string;
+
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  contact_number?: string;
+
   date_of_birth: string;
   gender: string;
   marital_status: string;
@@ -61,6 +71,10 @@ export default function PersonalDetailsPage() {
   const [loading, setLoading] = useState(false);
   const [originalData, setOriginalData] = useState<PersonalForm | null>(null);
   const [personalUuid, setPersonalUuid] = useState<string | null>(null);
+  const { setLoading: setGlobalLoading } = useGlobalLoading();
+
+  const hasLoadedRef = useRef(false);
+  const isSubmittingRef = useRef(false);
 
   /* ---------------- FORM STATE ---------------- */
 
@@ -92,63 +106,75 @@ export default function PersonalDetailsPage() {
 
   /* ---------------- TOKEN → USER → OFFER ---------------- */
 
-  useEffect(() => {
-    if (!token) return;
-  const loadOfferDetails = async () => {
+useEffect(() => {
+  if (!token || hasLoadedRef.current) return;
+
+  hasLoadedRef.current = true;
+
+  const loadPersonalDetails = async () => {
     try {
       const tokenRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`
       );
-      if (!tokenRes.ok) throw new Error();
+      if (!tokenRes.ok) return;
 
       const user_uuid: string = await tokenRes.json();
 
       const offerRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/offerletters/offer/${user_uuid}`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/offerletters/offer/${user_uuid}`
       );
-      if (!offerRes.ok) throw new Error();
+      if (!offerRes.ok) return;
 
-      const offerData: OfferLetter = await offerRes.json();
+      const offerData = await offerRes.json();
       setOffer(offerData);
 
-       // 🔹 Fetch existing personal details
+      setFormData(prev => ({
+        ...prev,
+        user_uuid: offerData.user_uuid,
+        first_name: offerData.first_name,
+        last_name: offerData.last_name,
+        email: offerData.mail,
+        contact_number: offerData.contact_number,
+      }));
+
       const personalRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/${user_uuid}`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/${user_uuid}`
       );
+      if (!personalRes.ok) return;
 
-      if (personalRes.ok) {
-        const data = await personalRes.json();
+      const data = await personalRes.json();
 
-        setPersonalUuid(data.personal_uuid); // if backend returns it
-        const mapped: PersonalForm = {
-          date_of_birth: data.date_of_birth || "",
-          gender: data.gender || "",
-          marital_status: data.marital_status || "",
-          blood_group: data.blood_group || "",
-          nationality_country_uuid: data.nationality_country_uuid || "",
-          residence_country_uuid: data.residence_country_uuid || "",
-          emergency_country_uuid: data.emergency_country_uuid || "",
-          emergency_contact: data.emergency_contact || "",
-        };
-        setOriginalData(mapped);
-        setFormData(mapped);
-      }
-    } catch {
-      setError("Failed to load offer details. Please check your token.");
-    }
+      const mapped = {
+        date_of_birth: data.date_of_birth || "",
+        gender: data.gender || "",
+        marital_status: data.marital_status || "",
+        blood_group: data.blood_group || "",
+        nationality_country_uuid: data.nationality_country_uuid || "",
+        residence_country_uuid: data.residence_country_uuid || "",
+        emergency_country_uuid: data.emergency_country_uuid || "",
+        emergency_contact: data.emergency_contact || "",
+      };
+
+      setPersonalUuid(data.personal_uuid ?? null);
+      setOriginalData(mapped);
+      setFormData(prev => ({ ...prev, ...mapped }));
+    } catch {}
   };
 
-  loadOfferDetails();
-  }, 
-  [token, setFormData]);
+  loadPersonalDetails();
+}, [token]);
 
-    function isEqual(a: PersonalForm, b: PersonalForm) {
+
+
+
+ 
+
+  /* ---------------- HANDLERS ---------------- */
+
+  function isEqual(a: PersonalForm, b: PersonalForm) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-
-
-  /* ---------------- HANDLERS ---------------- */
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
@@ -159,12 +185,18 @@ export default function PersonalDetailsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
     setLoading(true);
+    setGlobalLoading(true);
      setError("");
 
   try {
     if (!offer) {
       setLoading(false);
+      setGlobalLoading(false);
       return;
     }
     const payload = {
@@ -212,8 +244,11 @@ export default function PersonalDetailsPage() {
   } catch {
     toast.error("Failed to save personal details");
     setError("Failed to save personal details");
+
+    isSubmittingRef.current = false;
   } finally {
     setLoading(false);
+    setGlobalLoading(false);
   }
 };
 

@@ -1,0 +1,8 @@
+export const COUNTRY_UUID = "019a8135-42fc-17ed-4825-f5a4634898fb";
+
+export const EDUCATION_HIERARCHY = [
+  "SSC",
+  "INTERMEDIATE",
+  "UNDER GRADUATE",
+  "POST GRADUATE",
+];

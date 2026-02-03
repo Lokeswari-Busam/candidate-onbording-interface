@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster} from "react-hot-toast";
+import { LoadingProvider } from "./components/onboarding/LoadingContext";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -27,12 +28,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {children}
-        {/* Toast notifications */}
-        <Toaster position="top-right" />
+        <LoadingProvider>
+          {children}
+          {/* Toast notifications */}
+          <Toaster position="top-right" />
+        </LoadingProvider>
       </body>
     </html>
   );
 }
-
 

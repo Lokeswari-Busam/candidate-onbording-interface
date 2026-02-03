@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLocalStorageForm } from "../hooks/localStorage";
 import toast from "react-hot-toast";
+import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
 /* ===================== TYPES ===================== */
 
 interface Country {
@@ -13,6 +14,7 @@ interface Country {
 }
 
 interface AddressForm {
+  address_type: "permanent" | "temporary";
   address_line1: string;
   address_line2: string;
   city: string;
@@ -30,7 +32,19 @@ interface AddressDraft {
 
 /* ===================== CONSTANT ===================== */
 
-const emptyAddress: AddressForm = {
+const emptyPermanentAddress: AddressForm = {
+  address_type: "permanent",
+  address_line1: "",
+  address_line2: "",
+  city: "",
+  district_or_ward: "",
+  state_or_region: "",
+  postal_code: "",
+  country_uuid: "",
+};
+
+const emptyTemporaryAddress: AddressForm = {
+  address_type: "temporary",
   address_line1: "",
   address_line2: "",
   city: "",
@@ -45,18 +59,21 @@ const emptyAddress: AddressForm = {
 export default function AddressDetailsPage() {
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
+  const { setLoading: setGlobalLoading } = useGlobalLoading();
 
 
 
   const [countries, setCountries] = useState<Country[]>([]);
   const [sameAsPermanent, setSameAsPermanent] = useState(false);
   const [error, setError] = useState("");
+  const hasLoadedRef = useRef(false);
+const [userUuid, setUserUuid] = useState<string | null>(null);
 
 const [draft, setDraft  ] = useLocalStorageForm<AddressDraft>(
   `address-details-${token}`,
   {
-    permanent: emptyAddress,
-    temporary: emptyAddress,
+    permanent: emptyPermanentAddress,
+    temporary: emptyTemporaryAddress,
   }
 );
 
@@ -66,6 +83,8 @@ const temporary = draft.temporary;
 const [originalDraft, setOriginalDraft] = useState<AddressDraft | null>(null);
 const [permanentUuid, setPermanentUuid] = useState<string | null>(null);
 const [temporaryUuid, setTemporaryUuid] = useState<string | null>(null);
+const isSubmittingRef = useRef(false);
+
 
 function isEqual(a: AddressForm, b: AddressForm) {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -82,7 +101,65 @@ function isEqual(a: AddressForm, b: AddressForm) {
       .catch(() => setError("Failed to load countries"));
   }, []);
 
-  
+useEffect(() => {
+  if (!token || hasLoadedRef.current) return;
+
+  hasLoadedRef.current = true;
+
+  const loadAddresses = async () => {
+    try {
+      // 🔐 Verify token ONCE
+      const tokenRes = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`
+      );
+      if (!tokenRes.ok) return;
+
+      const user_uuid: string = await tokenRes.json();
+      setUserUuid(user_uuid);
+
+      // 📦 Fetch address details
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/address/${user_uuid}`
+      );
+      if (!res.ok) return;
+
+      const data = await res.json();
+
+      const mapped: AddressDraft = {
+        permanent: data.permanent || emptyPermanentAddress,
+        temporary: data.temporary || emptyTemporaryAddress,
+      };
+
+      setOriginalDraft(mapped);
+      setDraft({
+  permanent: {
+    ...mapped.permanent,
+    address_type: "permanent",
+  },
+  temporary: {
+    ...mapped.temporary,
+    address_type: "temporary",
+  },
+});
+
+
+      setPermanentUuid(data.permanent?.address_uuid ?? null);
+      setTemporaryUuid(data.temporary?.address_uuid ?? null);
+    } catch {
+      // intentionally silent
+    }
+  };
+
+  loadAddresses();
+}, [token, setDraft]);
+
+ 
+
+      
+
+
+      
+   
 
   
   /* ---------------- HANDLERS ---------------- */
@@ -93,12 +170,20 @@ function isEqual(a: AddressForm, b: AddressForm) {
   const { name, value } = e.target;
 
   setDraft((prev) => {
-    const updatedPermanent = { ...prev.permanent, [name]: value };
-    return {
-      permanent: updatedPermanent,
-      temporary: sameAsPermanent ? updatedPermanent : prev.temporary,
+    const updatedPermanent: AddressForm = {
+      ...prev.permanent,
+      address_type: "permanent" as const,
+      [name]: value,
     };
-  });
+
+  return {
+    permanent: updatedPermanent,
+    temporary: sameAsPermanent
+      ? { ...updatedPermanent, address_type: "temporary" }
+      : prev.temporary,
+  };
+});
+
 };
 
   const handleTemporaryChange = (
@@ -108,7 +193,9 @@ function isEqual(a: AddressForm, b: AddressForm) {
 
   setDraft((prev) => ({
     permanent: prev.permanent,
-    temporary: { ...prev.temporary, [name]: value },
+    temporary: { ...prev.temporary, 
+      address_type: "temporary",
+      [name]: value },
   }));
 };
 
@@ -118,79 +205,38 @@ function isEqual(a: AddressForm, b: AddressForm) {
   if (checked) {
     setDraft((prev) => ({
       permanent: prev.permanent,
-      temporary: prev.permanent,
+      temporary: { ...prev.permanent,
+        address_type: "temporary",
+      },
     }));
   }
 };
 
-useEffect(() => {
-  if (!token) return;
-
-  const loadAddresses = async () => {
-    try {
-      const tokenRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`,
-      );
-      if (!tokenRes.ok) throw new Error();
-
-      const user_uuid: string = await tokenRes.json();
-
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/address/${user_uuid}`,
-      );
-
-      // If backend doesn't have data yet, just continue silently
-      if (!res.ok) return;
-
-      const data = await res.json();
-
-      const mapped: AddressDraft = {
-        permanent: data.permanent || emptyAddress,
-        temporary: data.temporary || emptyAddress,
-      };
-
-      setOriginalDraft(mapped);
-      setDraft(mapped);
-
-      setPermanentUuid(data.permanent?.address_uuid || null);
-      setTemporaryUuid(data.temporary?.address_uuid || null);
-    } catch {
-      // ❌ Do NOT show error for address prefill
-      // This just means "no existing data"
-    }
-  };
-
-  loadAddresses();
-}, [token, setDraft]);
 
 
 
   const handleContinue = async () => {
-  setError("");
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    setError("");
+    setGlobalLoading(true);
 
   try {
-    const tokenRes = await fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`,
-    );
-    if (!tokenRes.ok) throw new Error();
-
-    const user_uuid: string = await tokenRes.json();
+    if (!userUuid) throw new Error();
 
     const saveAddress = async (
-      type: "permanent" | "temporary",
       current: AddressForm,
       original: AddressForm | null,
       uuid: string | null,
     ) => {
       const payload = {
-        user_uuid,
-        address_type: type,
+        user_uuid: userUuid,
         ...current,
       };
 
       if (!original) {
         // POST
-        const res = await fetch(
+        await fetch(
           `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/address`,
           {
             method: "POST",
@@ -198,11 +244,10 @@ useEffect(() => {
             body: JSON.stringify(payload),
           },
         );
-        if (!res.ok) throw new Error();
-        toast.success(`${type} address saved`);
+        toast.success(`${current.address_type} address saved`);
       } else if (!isEqual(original, current) && uuid) {
         // PUT
-        const res = await fetch(
+        await fetch(
           `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/address/${uuid}`,
           {
             method: "PUT",
@@ -210,13 +255,11 @@ useEffect(() => {
             body: JSON.stringify(payload),
           },
         );
-        if (!res.ok) throw new Error();
-        toast.success(`${type} address updated`);
+        toast.success(`${current.address_type} address updated`);
       }
     };
 
     await saveAddress(
-      "permanent",
       permanent,
       originalDraft?.permanent || null,
       permanentUuid,
@@ -224,12 +267,12 @@ useEffect(() => {
 
     if (!sameAsPermanent) {
       await saveAddress(
-        "temporary",
         temporary,
         originalDraft?.temporary || null,
         temporaryUuid,
       );
     }
+    
 
     if (
       originalDraft &&
@@ -244,6 +287,9 @@ useEffect(() => {
   } catch {
     toast.error("Failed to save address details");
     setError("Failed to save address details");
+  }finally{
+    isSubmittingRef.current = false;
+    setGlobalLoading(false);
   }
 };
 

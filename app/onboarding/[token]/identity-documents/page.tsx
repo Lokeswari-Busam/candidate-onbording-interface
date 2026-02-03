@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLocalStorageForm } from "../hooks/localStorage";
 import toast from "react-hot-toast";
+import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
 
 /* ===================== TYPES ===================== */
 
@@ -14,16 +15,20 @@ interface Country {
 }
 
 interface IdentityType {
+  mapping_uuid: string;
   identity_type_uuid: string;
   identity_type_name: string;
   is_mandatory: boolean;
 }
 
 interface IdentityDocument {
+  mapping_uuid: string;
+  identity_uuid?: string;
   identity_type_uuid: string;
   identity_type_name: string;
   identity_file_number: string;
-  fileName?: string;
+  file?: File;
+  file_path?: string;
 }
 
 
@@ -38,38 +43,33 @@ interface IdentityDraft {
 export default function IdentityDocumentsPage() {
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
+  const { setLoading: setGlobalLoading } = useGlobalLoading();
 
 
   const [countries, setCountries] = useState<Country[]>([]);
   const [identityTypes, setIdentityTypes] = useState<IdentityType[]>([]);
-  const [draft, setDraft] = useLocalStorageForm<IdentityDraft>(
+  
+const [draft, setDraft] = useLocalStorageForm<IdentityDraft>(
   `identity-details-${token}`,
   {
     country_uuid: "",
     documents: [],
   }
-  );
+);
+
   const selectedCountry = draft.country_uuid;
   const documents = draft.documents;
-  type ExistingDoc = {
-  identity_uuid: string;
-  identity_type_uuid: string;
-  identity_file_number: string;
-};
 
-  const [originalDocs, setOriginalDocs] = useState<
-    Record<string, ExistingDoc>
-  >({});
-  
+
+const [originalDraft, setOriginalDraft] = useState<IdentityDraft | null>(null);
+const [userUuid, setUserUuid] = useState<string | null>(null);
+
+
+
+
 
   const [error, setError] = useState("");
 
-  function isDocEqual(
-  a: IdentityDocument & { file?: File },
-  b: ExistingDoc
-) {
-  return a.identity_file_number === b.identity_file_number && !a.file;
-}
 
 
   /* ===================== FETCH COUNTRIES ===================== */
@@ -88,77 +88,63 @@ export default function IdentityDocumentsPage() {
   /* ===================== FETCH IDENTITY TYPES ===================== */
 
   useEffect(() => {
-    if (!selectedCountry) return;
+  if (!selectedCountry) return;
 
-    fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/identity/country-mapping/identities/${selectedCountry}`,
-    )
-      .then((res) => res.json())
-      .then((data: IdentityType[]) => {
-        const list = Array.isArray(data) ? data : [];
-        const mandatory = list.filter((d) => d.is_mandatory);
+  fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}/identity/country-mapping/identities/${selectedCountry}`
+  )
+    .then((res) => res.json())
+    .then((data) => {
 
-        if (mandatory.length < 2) {
-          setError(
-            "This country must have at least 2 mandatory identity documents. Please contact HR.",
-          );
-        } else {
-          setError("");
-        }
+      const list = Array.isArray(data) ? data : [];
+      setIdentityTypes(list);
+    })
+    .catch(() => setError("Unable to load identity documents"));
+}, [selectedCountry]);
 
-        setIdentityTypes(list);
-      })
-      .catch(() => setError("Unable to load identity documents"));
-  }, [selectedCountry]);
 
-  useEffect(() => {
+useEffect(() => {
   if (!token) return;
 
-  (async () => {
-    try {
-      // Resolve user_uuid
-      const tokenRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`
-      );
-      if (!tokenRes.ok) throw new Error();
-      const user_uuid: string = await tokenRes.json();
+  // snapshot draft ONLY once (after hydration)
+  if (!originalDraft) {
+    setOriginalDraft(JSON.parse(JSON.stringify(draft)));
+  }
 
-      // Fetch existing identity docs for this user
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/identity-documents/${user_uuid}`
-      );
-      if (!res.ok) throw new Error();
+  // resolve user_uuid once
+  if (!userUuid) {
+    (async () => {
+      try {
+        const tokenRes = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`
+        );
+        if (!tokenRes.ok) return;
+        setUserUuid(await tokenRes.json());
+      } catch {}
+    })();
+  }
+}, [token, draft, originalDraft, userUuid]);
 
-      const data: ExistingDoc[] = await res.json();
+// Note: Swagger shows only POST and PUT for identity documents.
+// No GET endpoint is available, so we avoid calling one here to prevent 405.
 
-      // Normalize into lookup map
-      const map: Record<string, ExistingDoc> = {};
-      data.forEach((d) => {
-        map[d.identity_type_uuid] = d;
-      });
+  
 
-      setOriginalDocs(map);
 
-      // Optional: prefill numbers into draft
-      setDraft((prev) => ({
-        ...prev,
-        documents: data.map((d) => ({
-          identity_type_uuid: d.identity_type_uuid,
-          identity_type_name: "",
-          identity_file_number: d.identity_file_number,
-        })),
-      }));
-    } catch {
-      // First-time user – no existing data
-    }
-  })();
-}, [token, setDraft]);
+
+
 
   /* ===================== FILE HANDLING ===================== */
 
   
     const handleFileChange = (identityType: IdentityType, file?: File) => {
   if (!file) return;
+
+  const MAX_SIZE_MB = 5;
+  if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+    setError(`File must be less than ${MAX_SIZE_MB} MB`);
+    return;
+  }
 
   setDraft((prev) => {
     const existing = prev.documents.find(
@@ -168,12 +154,15 @@ export default function IdentityDocumentsPage() {
     const updatedDocs = existing
       ? prev.documents.map((d) =>
           d.identity_type_uuid === identityType.identity_type_uuid
-            ? { ...d, file }
+            ? { ...d, file ,
+              mapping_uuid: identityType.mapping_uuid,
+            }
             : d
         )
       : [
           ...prev.documents,
           {
+            mapping_uuid: identityType.mapping_uuid,
             identity_type_uuid: identityType.identity_type_uuid,
             identity_type_name: identityType.identity_type_name,
             identity_file_number: "",
@@ -192,6 +181,7 @@ export default function IdentityDocumentsPage() {
   identityType: IdentityType,
   value: string
 ) => {
+  setError("");
   setDraft((prev) => {
     const existing = prev.documents.find(
       (d) => d.identity_type_uuid === identityType.identity_type_uuid
@@ -200,12 +190,15 @@ export default function IdentityDocumentsPage() {
     const updatedDocs = existing
       ? prev.documents.map((d) =>
           d.identity_type_uuid === identityType.identity_type_uuid
-            ? { ...d, identity_file_number: value }
+            ? { ...d, identity_file_number: value,
+              mapping_uuid: identityType.mapping_uuid,
+             }
             : d
         )
       : [
           ...prev.documents,
           {
+            mapping_uuid: identityType.mapping_uuid,
             identity_type_uuid: identityType.identity_type_uuid,
             identity_type_name: identityType.identity_type_name,
             identity_file_number: value,
@@ -220,101 +213,170 @@ export default function IdentityDocumentsPage() {
       
 
   /* ===================== CONTINUE ===================== */
+   const hasChanges = () => {
+  if (!originalDraft) return true;
 
-//   const handleContinue = () => {
-//   const mandatoryDocs = identityTypes.filter((d) => d.is_mandatory);
+  const originalDocs = originalDraft.documents;
 
-//   const uploadedMandatory = mandatoryDocs.every((doc) =>
-//     documents.some(
-//       (d) =>
-//         d.identity_type_uuid === doc.identity_type_uuid &&
-//         d.identity_file_number?.trim() &&
-//         d.file
-//     )
-//   );
-//   if (!uploadedMandatory) {
-//     setError("Please upload all mandatory identity documents.");
-//     return;
-//   }
-//   // later: POST draft to backend here
-//   // 🔥 clears localStorage only after success
-//   router.push(`/onboarding/${token}/education-details`);
-// };
+  for (const doc of documents) {
+    const old = originalDocs.find(
+      (d) => d.identity_type_uuid === doc.identity_type_uuid
+    );
 
-  const handleContinue = async () => {
-  const mandatoryDocs = identityTypes.filter((d) => d.is_mandatory);
-
-  // Basic draft validation (numbers only)
-  const numbersOk = mandatoryDocs.every((doc) =>
-    documents.some(
-      (d) =>
-        d.identity_type_uuid === doc.identity_type_uuid &&
-        d.identity_file_number?.trim()
-    )
-  );
-
-  if (!numbersOk) {
-    setError("Please fill all mandatory identity numbers.");
-    return;
+    if (!old) return true;
+    if (old.identity_file_number !== doc.identity_file_number) return true;
+    if (doc.file) return true;
   }
 
+  return false;
+};
+
+const handleContinue = async () => {
+  setGlobalLoading(true);
   try {
-    const tokenRes = await fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`
-    );
-    if (!tokenRes.ok) throw new Error();
-    const user_uuid: string = await tokenRes.json();
+    if (!userUuid) throw new Error();
+
+    const mandatoryDocs = identityTypes.filter((d) => d.is_mandatory);
+
+    // Mandatory validation
+    for (const type of mandatoryDocs) {
+      const doc = documents.find(
+        (d) => d.identity_type_uuid === type.identity_type_uuid
+      );
+
+      if (!doc || !doc.identity_file_number?.trim()) {
+        setError(`Please complete ${type.identity_type_name}`);
+        return;
+      }
+
+      // File required only if no existing identity on server
+      if (!doc.identity_uuid && !doc.file) {
+        setError(`Please upload ${type.identity_type_name}`);
+        return;
+      }
+    }
+
+    // 🟢 ACTION 3 — NO CHANGES
+    if (!hasChanges()) {
+      toast("No changes detected. Moving to next step.");
+      router.push(`/onboarding/${token}/education-details`);
+      return;
+    }
+
+    const resolveFilePath = (data: unknown) => {
+      if (!data || typeof data !== "object") return undefined;
+      const maybe = data as {
+        file_path?: string;
+        filePath?: string;
+        identity_uuid?: string;
+      };
+      return {
+        file_path:
+          typeof maybe.file_path === "string"
+            ? maybe.file_path
+            : typeof maybe.filePath === "string"
+              ? maybe.filePath
+              : undefined,
+        identity_uuid:
+          typeof maybe.identity_uuid === "string"
+            ? maybe.identity_uuid
+            : undefined,
+      };
+    };
 
     for (const doc of documents) {
-      const existing = originalDocs[doc.identity_type_uuid];
+      const old = originalDraft?.documents.find(
+        (d) => d.identity_type_uuid === doc.identity_type_uuid
+      );
 
-      const form = new FormData();
-      form.append("mapping_uuid", doc.identity_type_uuid);
-      form.append("user_uuid", user_uuid);
-      form.append("identity_file_number", doc.identity_file_number);
-      if (doc.file) form.append("file", doc.file);
+      const identityUuid = doc.identity_uuid || old?.identity_uuid;
 
-      // 1️⃣ CREATE
-      if (!existing) {
-        if (!doc.file) {
-          setError(`Please upload ${doc.identity_type_name}`);
-          return;
-        }
+      // 🟢 ACTION 1 — POST
+      if (!identityUuid) {
+        const form = new FormData();
+        form.append("mapping_uuid", doc.mapping_uuid);
+        form.append("user_uuid", userUuid);
+        form.append("identity_file_number", doc.identity_file_number);
+        if (doc.file) form.append("file", doc.file);
 
-        await fetch(
+        const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/identity-documents`,
           { method: "POST", body: form }
         );
-        toast.success(`${doc.identity_type_name} created`);
-      }
-
-      // 2️⃣ UPDATE
-      else if (!isDocEqual(doc, existing)) {
-        if (!doc.file && doc.identity_file_number !== existing.identity_file_number) {
-          setError(`Please re-upload ${doc.identity_type_name}`);
-          return;
+        if (!res.ok) throw new Error();
+        let filePath: string | undefined;
+        let identityUuid: string | undefined;
+        try {
+          const data = await res.json();
+          const resolved = resolveFilePath(data);
+          filePath = resolved.file_path;
+          identityUuid = resolved.identity_uuid;
+        } catch {}
+        if (filePath || identityUuid) {
+          setDraft((prev) => ({
+            ...prev,
+            documents: prev.documents.map((d) =>
+              d.identity_type_uuid === doc.identity_type_uuid
+                ? {
+                    ...d,
+                    file_path: filePath ?? d.file_path,
+                    identity_uuid: identityUuid ?? d.identity_uuid,
+                  }
+                : d
+            ),
+          }));
         }
-
-        await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/identity-documents/${existing.identity_uuid}`,
-          { method: "PUT", body: form }
-        );
-        toast.success(`${doc.identity_type_name} updated`);
+        toast.success("Identity documents saved successfully");
       }
 
-      // 3️⃣ SKIP – unchanged
+      // 🟢 ACTION 2 — PUT
+      else if (
+        !old ||
+        old.identity_file_number !== doc.identity_file_number ||
+        doc.file
+      ) {
+        const form = new FormData();
+        form.append("identity_file_number", doc.identity_file_number);
+        if (doc.file) form.append("file", doc.file);
+
+        const endpoint = `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/identity-documents/${identityUuid}`;
+        const res = await fetch(endpoint, { method: "PUT", body: form });
+        if (!res.ok) throw new Error();
+        let filePath: string | undefined;
+        let newIdentityUuid: string | undefined;
+        try {
+          const data = await res.json();
+          const resolved = resolveFilePath(data);
+          filePath = resolved.file_path;
+          newIdentityUuid = resolved.identity_uuid;
+        } catch {}
+        if (filePath || newIdentityUuid) {
+          setDraft((prev) => ({
+            ...prev,
+            documents: prev.documents.map((d) =>
+              d.identity_type_uuid === doc.identity_type_uuid
+                ? {
+                    ...d,
+                    file_path: filePath ?? d.file_path,
+                    identity_uuid: newIdentityUuid ?? d.identity_uuid,
+                  }
+                : d
+            ),
+          }));
+        }
+        toast.success("Identity documents updated successfully");
+      }
     }
 
     router.push(`/onboarding/${token}/education-details`);
   } catch {
     toast.error("Failed to save identity documents");
-    setError("Failed to save identity documents");
+  } finally {
+    setGlobalLoading(false);
   }
 };
 
-  
-
-  /* ===================== UI ===================== */
+    /* ===================== UI ===================== */
 
   return (
     <div style={pageWrapper}>
@@ -328,7 +390,8 @@ export default function IdentityDocumentsPage() {
               setDraft({
                 country_uuid: e.target.value,
                 documents: [],
-              })
+              });
+              setOriginalDraft(null);
             }}
             style={inputStyle}
           >
@@ -374,9 +437,16 @@ export default function IdentityDocumentsPage() {
                   />
                 </label>
                 <span style={fileNameText}>
-                  {documents.find(
-                    (d) => d.identity_type_uuid === doc.identity_type_uuid,
-                  )?.file?.name || "No file chosen"}
+                  {(() => {
+                    const existing = documents.find(
+                      (d) => d.identity_type_uuid === doc.identity_type_uuid,
+                    );
+                    if (existing?.file) return existing.file.name;
+                    if (existing?.file_path) {
+                      return existing.file_path.split("/").pop();
+                    }
+                    return "No file chosen";
+                  })()}
                 </span>
               </div>
 

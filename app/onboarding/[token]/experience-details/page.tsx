@@ -1,24 +1,28 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { ChangeEvent, useState } from "react";
+import { ChangeEvent, useEffect, useState } from "react";
 import { useLocalStorageForm } from "../hooks/localStorage";
+import { toast } from "react-hot-toast";
+import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
 
 /* ===================== TYPES (MATCH STORE) ===================== */
 
 interface ExperienceDocument {
   doc_type: string;
   file: File;
+  file_path?: string;
 }
 
 interface ExperienceDetails {
+  experience_uuid?: string;
   company_name: string;
-  role_title: string;        // ✅ REQUIRED
+  role_title: string; // ✅ REQUIRED
   start_date: string;
   end_date: string;
   employment_type: string;
   is_current: number;
-  remarks: string;           // ✅ REQUIRED
+  remarks: string; // ✅ REQUIRED
   documents: ExperienceDocument[];
 }
 
@@ -38,17 +42,51 @@ export default function ExperienceDetailsPage() {
   const router = useRouter();
   const { token } = useParams();
   const [loading, setLoading] = useState(false);
+  const { setLoading: setGlobalLoading } = useGlobalLoading();
 
-  const [experienceList, setExperienceList] =
-  useLocalStorageForm<ExperienceDetails[]>(
-    `experience-details-${token}`,
-    []
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  
+
+  const [experienceList, setExperienceList] = useLocalStorageForm<
+    ExperienceDetails[]
+  >(`experience-details-${token}`, []);
+
+  const [originalList, setOriginalList] = useState<ExperienceDetails[] | null>(
+    null,
   );
-    
+
+  useEffect(() => {
+    if (originalList !== null) return;
+    setOriginalList(JSON.parse(JSON.stringify(experienceList)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!mounted) return null;
+
+  const hasExperienceChanged = (
+    oldExp: ExperienceDetails,
+    newExp: ExperienceDetails,
+  ) => {
+    return (
+      oldExp.company_name !== newExp.company_name ||
+      oldExp.role_title !== newExp.role_title ||
+      oldExp.start_date !== newExp.start_date ||
+      oldExp.end_date !== newExp.end_date ||
+      oldExp.employment_type !== newExp.employment_type ||
+      oldExp.is_current !== newExp.is_current ||
+      oldExp.remarks !== newExp.remarks
+    );
+  };
+
   const addExperience = () => {
     const newExp: ExperienceDetails = {
       company_name: "",
-      role_title: "",      // ✅ NEVER undefined
+      role_title: "", // ✅ NEVER undefined
       start_date: "",
       end_date: "",
       employment_type: "",
@@ -63,72 +101,203 @@ export default function ExperienceDetailsPage() {
   const updateExperience = (
     index: number,
     field: keyof ExperienceDetails,
-    value: string | number | ExperienceDocument[]
+    value: string | number | ExperienceDocument[],
   ) => {
     const updated = [...experienceList];
     updated[index] = { ...updated[index], [field]: value };
     setExperienceList(updated);
   };
 
-  const updateDocument = (
-    index: number,
-    doc_type: string,
-    file: File
-  ) => {
+  const updateDocument = (index: number, doc_type: string, file: File) => {
     const updated = [...experienceList];
     const docs = updated[index].documents.filter(
-      (d) => d.doc_type !== doc_type
+      (d) => d.doc_type !== doc_type,
     );
-    docs.push({ doc_type, file });
+    docs.push({ doc_type, file, file_path: file.name });
     updated[index].documents = docs;
     setExperienceList(updated);
   };
 
-  const handleSaveAndContinue = () => {
-  if (experienceList.length === 0) {
-    alert("Please add at least one experience.");
-    return;
-  }
+  const handleSaveAndContinue = async () => {
+    setLoading(true);
+    setGlobalLoading(true);
 
-  for (let i = 0; i < experienceList.length; i++) {
-    const exp = experienceList[i];
+    try {
+      if (!token) throw new Error();
 
-    if (
-      !exp.company_name ||
-      !exp.role_title ||
-      !exp.start_date ||
-      !exp.employment_type ||
-      !exp.remarks
-    ) {
-      alert(`Please fill all required fields in Experience ${i + 1}`);
-      return;
-    }
+      // 1️⃣ Resolve employee_uuid
+      const tokenRes = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`,
+      );
+      if (!tokenRes.ok) throw new Error();
+      const employee_uuid: string = await tokenRes.json();
 
-    if (exp.is_current === 0 && !exp.end_date) {
-      alert(`Please provide End Date in Experience ${i + 1}`);
-      return;
-    }
+      // 🔹 Required documents per experience
+      for (let i = 0; i < experienceList.length; i++) {
+        const exp = experienceList[i];
+        const requiredDocs =
+          EMPLOYMENT_DOCUMENT_RULES[exp.employment_type] || [];
 
-    const requiredDocs =
-      EMPLOYMENT_DOCUMENT_RULES[exp.employment_type] || [];
+        for (const docType of requiredDocs) {
+          const hasDoc = exp.documents.some((d) => d.doc_type === docType);
 
-    for (const doc of requiredDocs) {
-      const hasDoc = exp.documents.some((d) => d.doc_type === doc);
-      if (!hasDoc) {
-        alert(
-          `Please upload ${doc.replace(/_/g, " ")} in Experience ${i + 1}`
+          if (!hasDoc) {
+            toast.error(
+              `Please upload ${docType.replace(/_/g, " ")} for Experience ${i + 1}`,
+            );
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      // 3️⃣ NO CHANGES
+      const noChanges =
+        originalList &&
+        originalList.length === experienceList.length &&
+        experienceList.every(
+          (exp, i) =>
+            originalList[i] &&
+            !hasExperienceChanged(originalList[i], exp) &&
+            exp.documents.length === originalList[i].documents.length,
         );
+
+      if (noChanges) {
+        toast.success("No changes detected");
+        setLoading(false);
+        router.push(`/onboarding/${token}/preview-page`);
         return;
       }
+
+      const resolveFilePath = async (res: Response) => {
+        const contentType = res.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) return undefined;
+        try {
+          const data = (await res.json()) as {
+            file_path?: string;
+            filePath?: string;
+            document_path?: string;
+          };
+          return (
+            data.file_path || data.filePath || data.document_path || undefined
+          );
+        } catch {
+          return undefined;
+        }
+      };
+
+      // 4️⃣ CREATE / UPDATE
+      for (let i = 0; i < experienceList.length; i++) {
+        const exp = experienceList[i];
+        const old = originalList?.[i];
+
+        // CREATE
+        if (!exp.experience_uuid) {
+          const form = new FormData();
+          form.append("employee_uuid", employee_uuid);
+          form.append("company_name", exp.company_name);
+          form.append("role_title", exp.role_title);
+          form.append("employment_type", exp.employment_type);
+          form.append("start_date", exp.start_date);
+          if (exp.end_date) form.append("end_date", exp.end_date);
+          form.append("is_current", String(exp.is_current));
+          form.append("remarks", exp.remarks);
+
+          exp.documents.forEach((d) => {
+            form.append("doc_types", d.doc_type);
+            form.append("files", d.file);
+          });
+
+          const res = await fetch(
+            `${process.env.NEXT_PUBLIC_API_BASE_URL}/experience/`,
+            { method: "POST", body: form },
+          );
+          if (!res.ok) throw new Error();
+
+          const data = await res.json();
+          exp.experience_uuid = data.experience_uuid;
+          if (Array.isArray(data?.documents)) {
+            const docMap = new Map(
+              data.documents.map(
+                (d: { doc_type?: string; file_path?: string }) => [
+                  d.doc_type,
+                  d.file_path,
+                ],
+              ),
+            );
+            setExperienceList((prev) => {
+              const updated = [...prev];
+              const docs = updated[i].documents.map((d) => ({
+                ...d,
+                file_path: docMap.get(d.doc_type) || d.file_path,
+              }));
+              updated[i] = { ...updated[i], documents: docs };
+              return updated;
+            });
+          }
+        }
+
+        // UPDATE metadata
+        else if (old && hasExperienceChanged(old, exp)) {
+          await fetch(
+            `${process.env.NEXT_PUBLIC_API_BASE_URL}/experience/${exp.experience_uuid}`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                employee_uuid,
+                company_name: exp.company_name,
+                role_title: exp.role_title,
+                employment_type: exp.employment_type,
+                start_date: exp.start_date,
+                end_date: exp.end_date,
+                is_current: exp.is_current,
+                remarks: exp.remarks,
+              }),
+            },
+          );
+        }
+
+        // UPDATE documents
+        if (old) {
+          for (const doc of exp.documents) {
+            const hadDoc = old.documents.some(
+              (d) => d.doc_type === doc.doc_type,
+            );
+
+            if (!hadDoc) {
+              const form = new FormData();
+              form.append("file", doc.file);
+              const res = await fetch(
+                `${process.env.NEXT_PUBLIC_API_BASE_URL}/experience/certificate/${exp.experience_uuid}/`,
+                { method: "PUT", body: form },
+              );
+              if (!res.ok) throw new Error();
+              const filePath = await resolveFilePath(res);
+              if (filePath) {
+                setExperienceList((prev) => {
+                  const updated = [...prev];
+                  const docs = updated[i].documents.map((d) =>
+                    d.doc_type === doc.doc_type ? { ...d, file_path: filePath } : d
+                  );
+                  updated[i] = { ...updated[i], documents: docs };
+                  return updated;
+                });
+              }
+            }
+          }
+        }
+      }
+
+      toast.success("Experience details saved");
+      router.push(`/onboarding/${token}/preview-page`);
+    } catch {
+      toast.error("Failed to save experience details");
+    } finally {
+      setLoading(false);
+      setGlobalLoading(false);
     }
-  }
-
-  // All validations passed
-  setLoading(true);
-  router.push(`/onboarding/${token}/preview-page`);
-};
-
-
+  };
   const removeExperience = (index: number) => {
     setExperienceList(experienceList.filter((_, i) => i !== index));
   };
@@ -212,7 +381,7 @@ export default function ExperienceDetailsPage() {
                     updateExperience(
                       index,
                       "is_current",
-                      e.target.checked ? 1 : 0
+                      e.target.checked ? 1 : 0,
                     )
                   }
                 />{" "}
@@ -235,26 +404,32 @@ export default function ExperienceDetailsPage() {
                   <div style={fileOuterBox}>
                     <label style={chooseFileBtn}>
                       Choose File
-                  <input
-                    type="file" hidden
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      e.target.files &&
-                      updateDocument(index, doc, e.target.files[0])
-                    }
-                  />
+                      <input
+                        type="file"
+                        hidden
+                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                          e.target.files &&
+                          updateDocument(index, doc, e.target.files[0])
+                        }
+                      />
                     </label>
                     <span style={fileNameText}>
-                      {exp.documents.find((d) => d.doc_type === doc)?.file.name ||
-                        "No file chosen"}
+                      {(() => {
+                        const existing = exp.documents.find(
+                          (d) => d.doc_type === doc,
+                        );
+                        if (existing?.file) return existing.file.name;
+                        if (existing?.file_path) {
+                          return existing.file_path.split("/").pop();
+                        }
+                        return "No file chosen";
+                      })()}
                     </span>
-                    </div>
+                  </div>
                 </Field>
               ))}
 
-              <button
-                onClick={() => removeExperience(index)}
-                style={removeBtn}
-              >
+              <button onClick={() => removeExperience(index)} style={removeBtn}>
                 Remove Experience
               </button>
             </div>
@@ -266,10 +441,23 @@ export default function ExperienceDetailsPage() {
         </button>
 
         <div style={{ textAlign: "right", marginTop: 24 }}>
-            <button type="submit" style={submitBtn} disabled={loading} onClick={handleSaveAndContinue}>
+          <button
+            type="submit"
+            style={{
+              ...submitBtn,
+              opacity: loading ? 0.7 : 1,
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
+            disabled={loading}
+            onClick={handleSaveAndContinue}
+          >
+            {loading ? "Saving..." : "Save & Continue"}
+          </button>
+
+          {/* <button type="submit" style={submitBtn} disabled={loading} onClick={handleSaveAndContinue}>
               Save & Continue
-            </button>
-          </div>
+            </button> */}
+        </div>
       </div>
     </div>
   );
@@ -286,9 +474,7 @@ function Field({
 }) {
   return (
     <div style={{ marginBottom: 16 }}>
-      <label style={{ display: "block", marginBottom: 6 }}>
-        {label}
-      </label>
+      <label style={{ display: "block", marginBottom: 6 }}>{label}</label>
       {children}
     </div>
   );
@@ -330,7 +516,6 @@ const addBtn = {
   color: "#fff",
   padding: "8px 16px",
   border: "none",
-
 };
 
 const removeBtn = {
@@ -348,21 +533,19 @@ const submitBtn = {
   border: "none",
 };
 
-
-
 const fileOuterBox = {
   display: "flex",
   alignItems: "center",
   width: "100%",
   height: 40,
-  border: "1px solid #000",       // main input border
+  border: "1px solid #000", // main input border
   borderRadius: 4,
   padding: "0 8px",
   backgroundColor: "#fff",
 };
 
 const fileButton = {
-  border: "1px solid #9ca3af",    // separate button border
+  border: "1px solid #9ca3af", // separate button border
   padding: "4px 10px",
   borderRadius: 4,
   cursor: "pointer",
@@ -374,7 +557,7 @@ const fileButton = {
 const fileNameText = {
   marginLeft: 12,
   fontSize: 14,
-  
+
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
@@ -384,5 +567,3 @@ const chooseFileBtn = {
   ...fileButton,
   color: "black",
 };
-
-

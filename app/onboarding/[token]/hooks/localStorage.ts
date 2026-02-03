@@ -28,8 +28,9 @@ export function useLocalStorageForm<T>(
 
   const updateState = (value: Updater<T>) => {
     setState((prev) =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      typeof value === "function" ? (value as any)(prev) : value
+      typeof value === "function"
+        ? (value as (p: T) => T)(prev)
+        : value
     );
   };
 
