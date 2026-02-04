@@ -3,10 +3,8 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useLocalStorageForm } from "../hooks/localStorage";
-import  toast from "react-hot-toast";
+import toast from "react-hot-toast";
 import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
-
-
 
 /* ===================== TYPES ===================== */
 
@@ -27,9 +25,7 @@ interface OfferLetter {
 }
 
 interface PersonalForm {
-
   user_uuid?: string;
-
   first_name?: string;
   last_name?: string;
   email?: string;
@@ -64,22 +60,20 @@ interface RowProps {
 export default function PersonalDetailsPage() {
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
+  const { setLoading: setGlobalLoading } = useGlobalLoading();
 
   const [countries, setCountries] = useState<Country[]>([]);
   const [offer, setOffer] = useState<OfferLetter | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [originalData, setOriginalData] = useState<PersonalForm | null>(null);
   const [personalUuid, setPersonalUuid] = useState<string | null>(null);
-  const { setLoading: setGlobalLoading } = useGlobalLoading();
 
   const hasLoadedRef = useRef(false);
   const isSubmittingRef = useRef(false);
 
   /* ---------------- FORM STATE ---------------- */
 
-  const [formData, setFormData] =
-  useLocalStorageForm<PersonalForm>(
+  const [formData, setFormData] = useLocalStorageForm<PersonalForm>(
     `personal-details-${token}`,
     {
       date_of_birth: "",
@@ -93,8 +87,6 @@ export default function PersonalDetailsPage() {
     }
   );
 
-
-
   /* ---------------- FETCH COUNTRIES ---------------- */
 
   useEffect(() => {
@@ -104,80 +96,71 @@ export default function PersonalDetailsPage() {
       .catch(() => setError("Failed to load countries"));
   }, []);
 
-  /* ---------------- TOKEN → USER → OFFER ---------------- */
+  /* ---------------- TOKEN → OFFER → PERSONAL ---------------- */
 
-useEffect(() => {
-  if (!token || hasLoadedRef.current) return;
+  useEffect(() => {
+    if (!token || hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
 
-  hasLoadedRef.current = true;
+    const loadData = async () => {
+      try {
+        const tokenRes = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`
+        );
+        if (!tokenRes.ok) return;
 
-  const loadPersonalDetails = async () => {
-    try {
-      const tokenRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`
-      );
-      if (!tokenRes.ok) return;
+        const user_uuid: string = await tokenRes.json();
 
-      const user_uuid: string = await tokenRes.json();
+        const offerRes = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/offerletters/offer/${user_uuid}`
+        );
+        if (!offerRes.ok) return;
 
-      const offerRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/offerletters/offer/${user_uuid}`
-      );
-      if (!offerRes.ok) return;
+        const offerData = await offerRes.json();
+        setOffer(offerData);
 
-      const offerData = await offerRes.json();
-      setOffer(offerData);
+        setFormData((prev) => ({
+          ...prev,
+          user_uuid: offerData.user_uuid,
+          first_name: offerData.first_name,
+          last_name: offerData.last_name,
+          email: offerData.mail,
+          contact_number: offerData.contact_number,
+        }));
 
-      setFormData(prev => ({
-        ...prev,
-        user_uuid: offerData.user_uuid,
-        first_name: offerData.first_name,
-        last_name: offerData.last_name,
-        email: offerData.mail,
-        contact_number: offerData.contact_number,
-      }));
+        const personalRes = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/${user_uuid}`
+        );
 
-      const personalRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/${user_uuid}`
-      );
-      if (!personalRes.ok) return;
+        if (personalRes.ok) {
+          const data = await personalRes.json();
 
-      const data = await personalRes.json();
+          setPersonalUuid(data.personal_uuid ?? null);
 
-      const mapped = {
-        date_of_birth: data.date_of_birth || "",
-        gender: data.gender || "",
-        marital_status: data.marital_status || "",
-        blood_group: data.blood_group || "",
-        nationality_country_uuid: data.nationality_country_uuid || "",
-        residence_country_uuid: data.residence_country_uuid || "",
-        emergency_country_uuid: data.emergency_country_uuid || "",
-        emergency_contact: data.emergency_contact || "",
-      };
+          setFormData((prev) => ({
+            ...prev,
+            date_of_birth: data.date_of_birth || "",
+            gender: data.gender || "",
+            marital_status: data.marital_status || "",
+            blood_group: data.blood_group || "",
+            nationality_country_uuid: data.nationality_country_uuid || "",
+            residence_country_uuid: data.residence_country_uuid || "",
+            emergency_country_uuid: data.emergency_country_uuid || "",
+            emergency_contact: data.emergency_contact || "",
+          }));
+        } else {
+          setPersonalUuid(null); // 🔥 ensures POST
+        }
+      } catch {}
+    };
 
-      setPersonalUuid(data.personal_uuid ?? null);
-      setOriginalData(mapped);
-      setFormData(prev => ({ ...prev, ...mapped }));
-    } catch {}
-  };
-
-  loadPersonalDetails();
-}, [token]);
-
-
-
-
- 
+    loadData();
+  }, [token, setFormData]);
 
   /* ---------------- HANDLERS ---------------- */
 
-  function isEqual(a: PersonalForm, b: PersonalForm) {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
-
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -186,71 +169,103 @@ useEffect(() => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!offer) {
+      toast.error("Offer details not loaded yet");
+      return;
+    }
+
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
 
     setLoading(true);
     setGlobalLoading(true);
-     setError("");
+    setError("");
 
-  try {
-    if (!offer) {
+    try {
+      const payload = {
+        user_uuid: offer.user_uuid,
+        date_of_birth: formData.date_of_birth,
+        gender: formData.gender,
+        marital_status: formData.marital_status,
+        blood_group: formData.blood_group,
+        nationality_country_uuid: formData.nationality_country_uuid,
+        residence_country_uuid: formData.residence_country_uuid,
+        emergency_country_uuid: formData.emergency_country_uuid,
+        emergency_contact: formData.emergency_contact,
+      };
+
+      // 🔵 FIRST TIME → POST
+      if (!personalUuid) {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/personal-details`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          }
+        );
+
+        if (!res.ok) throw new Error();
+
+        const data = await res.json();
+        setPersonalUuid(data.personal_uuid);
+
+        toast.success("Personal details saved successfully");
+      }
+
+      // 🔵 AFTER FIRST TIME → PUT
+      else {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/${personalUuid}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          }
+        );
+
+        if (!res.ok) throw new Error();
+
+        toast.success("Personal details updated successfully");
+      }
+
+      router.push(`/onboarding/${token}/address-details`);
+    } catch {
+      toast.error("Failed to save personal details");
+      setError("Failed to save personal details");
+    } finally {
       setLoading(false);
       setGlobalLoading(false);
-      return;
+      isSubmittingRef.current = false;
     }
-    const payload = {
-      user_uuid: offer.user_uuid,
-      date_of_birth: formData.date_of_birth,
-      gender: formData.gender,
-      marital_status: formData.marital_status,
-      blood_group: formData.blood_group,
-      nationality_country_uuid: formData.nationality_country_uuid,
-      residence_country_uuid: formData.residence_country_uuid,
-      emergency_country_uuid: formData.emergency_country_uuid,
-      emergency_contact: formData.emergency_contact,
-    };
-    // Case 1: Empty DB → POST
-    if (!originalData) {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/personal-details`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        },
-      );
-      if (!res.ok) throw new Error();
-      toast.success("Personal details saved successfully");
-    }
-    // Case 2: Exists & changed → PUT
-    else if (!isEqual(originalData, formData) && personalUuid) {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/${personalUuid}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        },
-      );
-      if (!res.ok) throw new Error();
-      toast.success("Personal details updated successfully");
-    }
-    // Case 3: Exists & unchanged → no API call
-    else{
-      toast.success("No changes detected. Moving to next step.");
-    }
-    router.push(`/onboarding/${token}/address-details`);
-  } catch {
-    toast.error("Failed to save personal details");
-    setError("Failed to save personal details");
+  };
 
-    isSubmittingRef.current = false;
-  } finally {
-    setLoading(false);
-    setGlobalLoading(false);
-  }
-};
+  function Field({ label, children }: FieldProps) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label style={labelStyle}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function ReadOnlyField({ label, value }: ReadOnlyFieldProps) {
+  return (
+    <div style={{ marginBottom: 16, flex: 1 }}>
+      <label style={labelStyle}>{label}</label>
+      <input
+        value={value}
+        disabled
+        style={{ ...inputStyle, backgroundColor: "#f3f4f6" }}
+      />
+    </div>
+  );
+}
+
+function Row({ children }: RowProps) {
+  return <div style={{ display: "flex", gap: 12 }}>{children}</div>;
+}
+
 
   /* ===================== UI ===================== */
 
@@ -261,7 +276,6 @@ useEffect(() => {
 
         {error && <p style={{ color: "red" }}>{error}</p>}
 
-        {/* 🔒 OFFER DETAILS */}
         {offer && (
           <>
             <Row>
@@ -292,7 +306,6 @@ useEffect(() => {
               value={formData.date_of_birth}
               onChange={handleChange}
               style={inputStyle}
-              required
             />
           </Field>
 
@@ -302,7 +315,6 @@ useEffect(() => {
               value={formData.gender}
               onChange={handleChange}
               style={inputStyle}
-              required
             >
               <option value="">Select</option>
               <option>Male</option>
@@ -317,13 +329,10 @@ useEffect(() => {
               value={formData.marital_status}
               onChange={handleChange}
               style={inputStyle}
-              required
             >
               <option value="">Select</option>
               <option>Single</option>
               <option>Married</option>
-          
-
             </select>
           </Field>
 
@@ -333,17 +342,16 @@ useEffect(() => {
               value={formData.blood_group}
               onChange={handleChange}
               style={inputStyle}
-              required
             >
               <option value="">Select</option>
               <option>A+</option>
               <option>A-</option>
               <option>B+</option>
-              <option>O+</option>
-              <option>AB+</option>
               <option>B-</option>
-              <option>O-</option>
+              <option>AB+</option>
               <option>AB-</option>
+              <option>O+</option>
+              <option>O-</option>
             </select>
           </Field>
 
@@ -353,7 +361,6 @@ useEffect(() => {
               value={formData.nationality_country_uuid}
               onChange={handleChange}
               style={inputStyle}
-              required
             >
               <option value="">Select Country</option>
               {countries.map((c) => (
@@ -370,7 +377,6 @@ useEffect(() => {
               value={formData.residence_country_uuid}
               onChange={handleChange}
               style={inputStyle}
-              required
             >
               <option value="">Select Country</option>
               {countries.map((c) => (
@@ -379,11 +385,11 @@ useEffect(() => {
                 </option>
               ))}
             </select>
-          </Field>          
-    
-        <Row>
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>Emergency Country Code</label>
+          </Field>
+
+           <Row>        
+            <div style={{ flex: 1 }}>
+                 <label style={labelStyle}>Emergency Country Code</label>
                 <select
                   name="emergency_country_uuid"
                   value={formData.emergency_country_uuid}
@@ -416,11 +422,8 @@ useEffect(() => {
                 />
               </div>
             </Row>
-
-          <div style={{ textAlign: "right", marginTop: 24 }}>
-            <button type="submit" style={submitBtn} disabled={loading}>
-              Save & Continue
-            </button>
+            <div style={{ textAlign: "right", marginTop: 24 }}>
+          <button disabled={isSubmittingRef.current} style={submitBtn} type="submit">{isSubmittingRef.current ? "Saving..." : "Save & Continue"} </button>
           </div>
         </form>
       </div>
@@ -428,36 +431,7 @@ useEffect(() => {
   );
 }
 
-/* ===================== REUSABLE COMPONENTS ===================== */
-
-function Field({ label, children }: FieldProps) {
-  return (
-    <div style={{ marginBottom: 16 }}>
-      
-      <label style={labelStyle}>{label}</label>
-      {children}
-    </div>
-  );
-}
-
-function ReadOnlyField({ label, value }: ReadOnlyFieldProps) {
-  return (
-    <div style={{ marginBottom: 16, flex: 1 }}>
-      <label style={labelStyle}>{label}</label>
-      <input
-        value={value}
-        disabled
-        style={{ ...inputStyle, backgroundColor: "#f3f4f6" }}
-      />
-    </div>
-  );
-}
-
-function Row({ children }: RowProps) {
-  return <div style={{ display: "flex", gap: 12 }}>{children}</div>;
-}
-
-/* ===================== STYLES ===================== */
+/* ===================== STYLES (UNCHANGED) ===================== */
 
 const pageWrapper = {
   backgroundColor: "#f5f7fb",

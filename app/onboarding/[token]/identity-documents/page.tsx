@@ -309,8 +309,10 @@ const handleContinue = async () => {
         try {
           const data = await res.json();
           const resolved = resolveFilePath(data);
-          filePath = resolved.file_path;
-          identityUuid = resolved.identity_uuid;
+          if (resolved) {
+            filePath = resolved.file_path;
+            identityUuid = resolved.identity_uuid;
+          }
         } catch {}
         if (filePath || identityUuid) {
           setDraft((prev) => ({
@@ -347,8 +349,10 @@ const handleContinue = async () => {
         try {
           const data = await res.json();
           const resolved = resolveFilePath(data);
-          filePath = resolved.file_path;
-          newIdentityUuid = resolved.identity_uuid;
+          if (resolved) {
+            filePath = resolved.file_path;
+            newIdentityUuid = resolved.identity_uuid;
+          }
         } catch {}
         if (filePath || newIdentityUuid) {
           setDraft((prev) => ({
