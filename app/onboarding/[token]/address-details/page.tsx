@@ -212,14 +212,12 @@ useEffect(() => {
   }
 };
 
+const handleContinue = async () => {
+  if (isSubmittingRef.current) return;
+  isSubmittingRef.current = true;
 
-
-
-  const handleContinue = async () => {
-    if (isSubmittingRef.current) return;
-    isSubmittingRef.current = true;
-    setError("");
-    setGlobalLoading(true);
+  setError("");
+  setGlobalLoading(true);
 
   try {
     if (!userUuid) throw new Error();
@@ -228,41 +226,72 @@ useEffect(() => {
       current: AddressForm,
       original: AddressForm | null,
       uuid: string | null,
+      setUuid: (id: string) => void
     ) => {
       const payload = {
         user_uuid: userUuid,
         ...current,
       };
 
-      if (!original) {
-        // POST
-        await fetch(
+      // 🟢 FIRST TIME → POST
+      if (!uuid) {
+        const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/address`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
-          },
+          }
         );
+
+        if (!res.ok) throw new Error();
+
+        const data = await res.json();
+        setUuid(data.address_uuid); // 🔥 critical
+
         toast.success(`${current.address_type} address saved`);
-      } else if (!isEqual(original, current) && uuid) {
-        // PUT
-        await fetch(
+      }
+
+      // 🔵 AFTER FIRST TIME → PUT (only if changed)
+      else if (!original || !isEqual(original, current)) {
+        const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/address/${uuid}`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
-          },
+          }
         );
+
+        if (!res.ok) throw new Error();
+
         toast.success(`${current.address_type} address updated`);
       }
     };
+
+    const permanentChanged =
+      !originalDraft || !isEqual(originalDraft.permanent, permanent);
+
+    const temporaryChanged =
+      !sameAsPermanent &&
+      (!originalDraft || !isEqual(originalDraft.temporary, temporary));
+
+    // 🟡 NO CHANGES → JUST MOVE
+    if (
+      originalDraft &&
+      !permanentChanged &&
+      (sameAsPermanent || !temporaryChanged)
+    ) {
+      toast("No changes detected. Moving to next step.");
+      router.push(`/onboarding/${token}/identity-documents`);
+      return;
+    }
 
     await saveAddress(
       permanent,
       originalDraft?.permanent || null,
       permanentUuid,
+      setPermanentUuid
     );
 
     if (!sameAsPermanent) {
@@ -270,29 +299,19 @@ useEffect(() => {
         temporary,
         originalDraft?.temporary || null,
         temporaryUuid,
+        setTemporaryUuid
       );
-    }
-    
-
-    if (
-      originalDraft &&
-      isEqual(originalDraft.permanent, permanent) &&
-      (sameAsPermanent ||
-        isEqual(originalDraft.temporary, temporary))
-    ) {
-      toast("No changes detected. Moving to next step.");
     }
 
     router.push(`/onboarding/${token}/identity-documents`);
   } catch {
     toast.error("Failed to save address details");
     setError("Failed to save address details");
-  }finally{
+  } finally {
     isSubmittingRef.current = false;
     setGlobalLoading(false);
   }
 };
-
   /* ===================== UI ===================== */
 
   return (
