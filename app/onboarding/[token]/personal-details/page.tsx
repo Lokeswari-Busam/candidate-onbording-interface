@@ -67,6 +67,9 @@ export default function PersonalDetailsPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [personalUuid, setPersonalUuid] = useState<string | null>(null);
+  const [originalPersonal, setOriginalPersonal] = useState<PersonalForm | null>(
+    null
+  );
 
   const hasLoadedRef = useRef(false);
   const isSubmittingRef = useRef(false);
@@ -127,35 +130,31 @@ export default function PersonalDetailsPage() {
           email: offerData.mail,
           contact_number: offerData.contact_number,
         }));
-
-        const personalRes = await fetch(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/${user_uuid}`
-        );
-
-        if (personalRes.ok) {
-          const data = await personalRes.json();
-
-          setPersonalUuid(data.personal_uuid ?? null);
-
-          setFormData((prev) => ({
-            ...prev,
-            date_of_birth: data.date_of_birth || "",
-            gender: data.gender || "",
-            marital_status: data.marital_status || "",
-            blood_group: data.blood_group || "",
-            nationality_country_uuid: data.nationality_country_uuid || "",
-            residence_country_uuid: data.residence_country_uuid || "",
-            emergency_country_uuid: data.emergency_country_uuid || "",
-            emergency_contact: data.emergency_contact || "",
-          }));
-        } else {
-          setPersonalUuid(null); // 🔥 ensures POST
-        }
       } catch {}
     };
 
     loadData();
   }, [token, setFormData]);
+
+  useEffect(() => {
+    if (!token) return;
+    const storedUuid = localStorage.getItem(`personal-uuid-${token}`);
+    if (storedUuid) {
+      setPersonalUuid(storedUuid);
+    }
+    const storedSnapshot = localStorage.getItem(
+      `personal-snapshot-${token}`
+    );
+    if (storedSnapshot) {
+      try {
+        setOriginalPersonal(JSON.parse(storedSnapshot) as PersonalForm);
+      } catch {
+        // ignore bad snapshot
+      }
+    }
+  }, [token]);
+
+  
 
   /* ---------------- HANDLERS ---------------- */
 
@@ -194,6 +193,25 @@ export default function PersonalDetailsPage() {
         emergency_contact: formData.emergency_contact,
       };
 
+      const isSame = (a: PersonalForm | null, b: typeof payload) => {
+        if (!a) return false;
+        return (
+          (a.date_of_birth || "") === b.date_of_birth &&
+          (a.gender || "") === b.gender &&
+          (a.marital_status || "") === b.marital_status &&
+          (a.blood_group || "") === b.blood_group &&
+          (a.nationality_country_uuid || "") === b.nationality_country_uuid &&
+          (a.residence_country_uuid || "") === b.residence_country_uuid &&
+          (a.emergency_country_uuid || "") === b.emergency_country_uuid &&
+          (a.emergency_contact || "") === b.emergency_contact
+        );
+      };
+      // no changes
+      if (personalUuid && isSame(originalPersonal, payload)) {
+        toast(" No changes detected");
+        router.push(`/onboarding/${token}/address-details`);
+        return;
+      }
       // 🔵 FIRST TIME → POST
       if (!personalUuid) {
         const res = await fetch(
@@ -209,6 +227,30 @@ export default function PersonalDetailsPage() {
 
         const data = await res.json();
         setPersonalUuid(data.personal_uuid);
+        localStorage.setItem(`personal-uuid-${token}`, data.personal_uuid);
+        setOriginalPersonal({
+          date_of_birth: payload.date_of_birth,
+          gender: payload.gender,
+          marital_status: payload.marital_status,
+          blood_group: payload.blood_group,
+          nationality_country_uuid: payload.nationality_country_uuid,
+          residence_country_uuid: payload.residence_country_uuid,
+          emergency_country_uuid: payload.emergency_country_uuid,
+          emergency_contact: payload.emergency_contact,
+        });
+        localStorage.setItem(
+          `personal-snapshot-${token}`,
+          JSON.stringify({
+            date_of_birth: payload.date_of_birth,
+            gender: payload.gender,
+            marital_status: payload.marital_status,
+            blood_group: payload.blood_group,
+            nationality_country_uuid: payload.nationality_country_uuid,
+            residence_country_uuid: payload.residence_country_uuid,
+            emergency_country_uuid: payload.emergency_country_uuid,
+            emergency_contact: payload.emergency_contact,
+          })
+        );
 
         toast.success("Personal details saved successfully");
       }
@@ -225,6 +267,30 @@ export default function PersonalDetailsPage() {
         );
 
         if (!res.ok) throw new Error();
+
+        setOriginalPersonal({
+          date_of_birth: payload.date_of_birth,
+          gender: payload.gender,
+          marital_status: payload.marital_status,
+          blood_group: payload.blood_group,
+          nationality_country_uuid: payload.nationality_country_uuid,
+          residence_country_uuid: payload.residence_country_uuid,
+          emergency_country_uuid: payload.emergency_country_uuid,
+          emergency_contact: payload.emergency_contact,
+        });
+        localStorage.setItem(
+          `personal-snapshot-${token}`,
+          JSON.stringify({
+            date_of_birth: payload.date_of_birth,
+            gender: payload.gender,
+            marital_status: payload.marital_status,
+            blood_group: payload.blood_group,
+            nationality_country_uuid: payload.nationality_country_uuid,
+            residence_country_uuid: payload.residence_country_uuid,
+            emergency_country_uuid: payload.emergency_country_uuid,
+            emergency_contact: payload.emergency_contact,
+          })
+        );
 
         toast.success("Personal details updated successfully");
       }
