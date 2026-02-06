@@ -10,6 +10,7 @@ import { useGlobalLoading } from "../../../components/onboarding/LoadingContext"
 
 interface ExperienceDocument {
   doc_type: string;
+ 
   file?: File;
   file_path?: string;
 }
@@ -138,6 +139,7 @@ useEffect(() => {
     const docs = updated[index].documents.filter(
       (d) => d.doc_type !== doc_type,
     );
+    docs.push({ doc_type, file, file_path: typeof file.name === "string" ? file.name : undefined });
     docs.push({ doc_type, file, file_path: file.name, });
     updated[index].documents = docs;
     setExperienceList(updated);
@@ -269,6 +271,14 @@ useEffect(() => {
             // If no documents in response, still persist the experience_uuid
             setExperienceList((prev) => {
               const updated = [...prev];
+              const docs = updated[i].documents.map((d) => ({
+                ...d,
+                file_path:
+              typeof docMap.get(d.doc_type) === "string"
+                ? (docMap.get(d.doc_type) as string)
+                : d.file_path,
+              }));
+              updated[i] = { ...updated[i], documents: docs };
               updated[i] = { ...updated[i], experience_uuid: data.experience_uuid };
               return updated;
             });
