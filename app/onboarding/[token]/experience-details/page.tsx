@@ -249,14 +249,14 @@ useEffect(() => {
           
           // Update documents with real database file paths from API response
           if (Array.isArray(data?.documents)) {
-            const updatedDocs = exp.documents.map((d) => {
-              const apiDoc = data.documents.find(
-                (apiD: { doc_type?: string }) => apiD.doc_type === d.doc_type
-              );
-              return apiDoc?.file_path
-                ? { ...d, file_path: apiDoc.file_path, file: undefined } // Store real path, clear File object
-                : d;
-            });
+            // Rebuild documents array from API response to avoid duplicates
+            const updatedDocs = data.documents.map(
+              (apiDoc: { doc_type?: string; file_path?: string }) => ({
+                doc_type: apiDoc.doc_type || "",
+                file: undefined,
+                file_path: apiDoc.file_path,
+              })
+            );
             
             setExperienceList((prev) => {
               const updated = [...prev];
@@ -271,15 +271,10 @@ useEffect(() => {
             // If no documents in response, still persist the experience_uuid
             setExperienceList((prev) => {
               const updated = [...prev];
-              const docs = updated[i].documents.map((d) => ({
-                ...d,
-                file_path:
-              typeof docMap.get(d.doc_type) === "string"
-                ? (docMap.get(d.doc_type) as string)
-                : d.file_path,
-              }));
-              updated[i] = { ...updated[i], documents: docs };
-              updated[i] = { ...updated[i], experience_uuid: data.experience_uuid };
+              updated[i] = { 
+                ...updated[i], 
+                experience_uuid: data.experience_uuid
+              };
               return updated;
             });
           }
@@ -319,20 +314,20 @@ useEffect(() => {
             if (!res.ok) throw new Error();
 
             // Update file paths from response if documents were uploaded
-            if (hasNewFiles && Array.isArray(res)) {
+            if (hasNewFiles) {
               const data = await res.json();
               if (Array.isArray(data?.documents)) {
                 setExperienceList((prev) => {
                   const updated = [...prev];
-                  const docs = updated[i].documents.map((d) => {
-                    const apiDoc = data.documents.find(
-                      (apiD: { doc_type?: string }) => apiD.doc_type === d.doc_type
-                    );
-                    return apiDoc?.file_path
-                      ? { ...d, file_path: apiDoc.file_path, file: undefined }
-                      : d;
-                  });
-                  updated[i] = { ...updated[i], documents: docs };
+                  // Rebuild documents array from API response to avoid duplicates
+                  const updatedDocs = data.documents.map(
+                    (apiDoc: { doc_type?: string; file_path?: string }) => ({
+                      doc_type: apiDoc.doc_type || "",
+                      file: undefined,
+                      file_path: apiDoc.file_path,
+                    })
+                  );
+                  updated[i] = { ...updated[i], documents: updatedDocs };
                   return updated;
                 });
               }
