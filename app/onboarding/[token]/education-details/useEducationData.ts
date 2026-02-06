@@ -36,6 +36,8 @@ export const useEducationData = ({
   }, [base, token, onError]);
 
   useEffect(() => {
+    if (!countryUuid) return; // Skip if countryUuid is not loaded
+
     fetchEducationMapping(base, countryUuid)
       .then((data) => {
         setRows(data);

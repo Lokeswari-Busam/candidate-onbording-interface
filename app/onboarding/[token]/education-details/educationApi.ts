@@ -38,11 +38,11 @@ export const createEducationDocument = async (
 
 export const updateEducationDocument = async (
   base: string,
-  documentUuid: string,
+  document_uuid: string,
   payload: FormData,
 ) => {
   const res = await fetch(
-    `${base}/education/employee-education-document/${documentUuid}`,
+    `${base}/education/employee-education-document/${document_uuid}`,
     { method: "PUT", body: payload },
   );
 

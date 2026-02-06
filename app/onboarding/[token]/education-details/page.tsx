@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import { useLocalStorageForm } from "../hooks/localStorage";
 import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
-import { COUNTRY_UUID, EDUCATION_HIERARCHY } from "./constants";
+import { EDUCATION_HIERARCHY } from "./constants";
 import EducationModal from "./EducationModal";
 import EducationTimeline from "./EducationTimeline";
 import {
@@ -33,13 +33,36 @@ export default function EducationDetailsPage() {
   const [loading, setLoading] = useState(false);
   const { setLoading: setGlobalLoading } = useGlobalLoading();
 
+  // Fetch nationality_country_uuid from personal details localStorage
+  const [countryUuid, setCountryUuid] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    try {
+      const personalDetails = localStorage.getItem(`personal-details-${token}`);
+      if (personalDetails) {
+        const parsed = JSON.parse(personalDetails);
+        if (parsed.nationality_country_uuid) {
+          setCountryUuid(parsed.nationality_country_uuid);
+        } else {
+          setError("Please complete Personal Details first to set your nationality");
+        }
+      } else {
+        setError("Please complete Personal Details first");
+      }
+    } catch {
+      setError("Failed to load country information from personal details");
+    }
+  }, [token]);
+
   const { rows, uploadedMap, setUploadedMap, userUuid } = useEducationData({
     base,
     token,
-    countryUuid: COUNTRY_UUID,
+    countryUuid: countryUuid || "",
     onError: setError,
   });
 
+  // ✅ ALL HOOKS MUST BE CALLED HERE (UNCONDITIONALLY)
   const grouped = useMemo(() => groupRows(rows), [rows]);
 
   const [educationDetails, setEducationDetails] =
@@ -96,6 +119,27 @@ export default function EducationDetailsPage() {
       setEducationDetails(orderedDrafts);
     }
   }, [orderedDrafts, educationDetails, setEducationDetails]);
+
+  // ✅ NOW WE CAN CHECK AND CONDITIONALLY RENDER
+  if (countryUuid === null) {
+    return (
+      <div style={pageWrapper}>
+        <div style={cardStyle}>
+          <p>Loading education details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && countryUuid === null) {
+    return (
+      <div style={pageWrapper}>
+        <div style={cardStyle}>
+          <p style={{ color: "red" }}>{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   const openLevel = (level: string) => {
     const draft = draftByLevel[level];
@@ -310,3 +354,19 @@ export default function EducationDetailsPage() {
     </div>
   );
 }
+
+/* ===================== STYLES ===================== */
+
+const pageWrapper = {
+  padding: "32px 0",
+  background: "#f5f7fb",
+  minHeight: "100vh",
+};
+
+const cardStyle = {
+  maxWidth: 720,
+  margin: "auto",
+  background: "#fff",
+  padding: 24,
+  borderRadius: 8,
+};

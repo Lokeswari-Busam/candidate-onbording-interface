@@ -260,7 +260,7 @@ const handleContinue = async () => {
     const saveAddress = async (
   current: AddressForm,
   original: AddressForm | null,
-  uuid: string | null,
+  address_uuid: string | null,
   setUuid: (id: string) => void
 ) => {
   const payload = {
@@ -276,12 +276,12 @@ const handleContinue = async () => {
   };
 
   // 🟡 skip if no change
-  if (uuid && original && isEqual(original, current)) return;
+  if (address_uuid && original && isEqual(original, current)) return;
 
   // 🔵 UPDATE
-  if (uuid) {
+  if (address_uuid) {
     const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/address/${uuid}`,
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/address/${address_uuid}`,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },

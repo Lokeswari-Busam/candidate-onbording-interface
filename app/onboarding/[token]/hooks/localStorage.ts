@@ -37,7 +37,9 @@ export function useLocalStorageForm<T>(
     }
 
     try {
-      localStorage.setItem(key, JSON.stringify(state));
+      const cleaned = removeFilesDeep(state);
+localStorage.setItem(key, JSON.stringify(cleaned));
+
     } catch (err) {
       console.error("Failed to write to localStorage", err);
     }
@@ -61,7 +63,9 @@ export function useLocalStorageForm<T>(
     setState(data);
     setIsHydrated(true);
     try {
-      localStorage.setItem(key, JSON.stringify(data));
+      const cleaned = removeFilesDeep(data);
+      localStorage.setItem(key, JSON.stringify(cleaned));
+
     } catch (err) {
       console.error("Failed to sync API data to localStorage", err);
     }
@@ -112,3 +116,23 @@ export function useLocalStorageForm<T>(
 
 //   return [state, updateState, clear];
 // }
+function removeFilesDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map(removeFilesDeep) as T;
+  }
+
+  if (value && typeof value === "object") {
+    const newObj: Record<string, unknown> = {};
+
+    for (const key in value as Record<string, unknown>) {
+      if (key === "file") continue; // remove File field
+      newObj[key] = removeFilesDeep(
+        (value as Record<string, unknown>)[key]
+      );
+    }
+
+    return newObj as T;
+  }
+
+  return value;
+}

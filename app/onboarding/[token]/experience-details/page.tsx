@@ -10,7 +10,7 @@ import { useGlobalLoading } from "../../../components/onboarding/LoadingContext"
 
 interface ExperienceDocument {
   doc_type: string;
-  file: File;
+  file?: File;
   file_path?: string;
 }
 
@@ -45,6 +45,31 @@ export default function ExperienceDetailsPage() {
   const { setLoading: setGlobalLoading } = useGlobalLoading();
 
   const [mounted, setMounted] = useState(false);
+function sanitizeDocuments(
+  docs: unknown[]
+): ExperienceDocument[] {
+  return docs.map((d) => {
+    const obj = d as Record<string, unknown>;
+
+    return {
+      doc_type: String(obj.doc_type ?? ""),
+      file: undefined,
+      file_path:
+        typeof obj.file_path === "string" ? obj.file_path : undefined,
+    };
+  });
+}
+useEffect(() => {
+  setExperienceList((prev) =>
+    prev.map((exp) => ({
+      ...exp,
+      documents: sanitizeDocuments(exp.documents ?? []),
+    }))
+  );
+
+  // run once
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
 
   useEffect(() => {
     setMounted(true);
@@ -113,7 +138,7 @@ export default function ExperienceDetailsPage() {
     const docs = updated[index].documents.filter(
       (d) => d.doc_type !== doc_type,
     );
-    docs.push({ doc_type, file, file_path: file.name });
+    docs.push({ doc_type, file, file_path: file.name, });
     updated[index].documents = docs;
     setExperienceList(updated);
   };
@@ -159,7 +184,9 @@ export default function ExperienceDetailsPage() {
           (exp, i) =>
             originalList[i] &&
             !hasExperienceChanged(originalList[i], exp) &&
-            exp.documents.length === originalList[i].documents.length,
+            JSON.stringify(exp.documents.map(d => d.file_path)) ===
+            JSON.stringify(originalList[i].documents.map(d => d.file_path))
+,
         );
 
       if (noChanges) {
@@ -205,7 +232,8 @@ export default function ExperienceDetailsPage() {
 
           exp.documents.forEach((d) => {
             form.append("doc_types", d.doc_type);
-            form.append("files", d.file);
+            if (d.file) form.append("files", d.file);
+
           });
 
           const res = await fetch(
@@ -216,70 +244,84 @@ export default function ExperienceDetailsPage() {
 
           const data = await res.json();
           exp.experience_uuid = data.experience_uuid;
+          
+          // Update documents with real database file paths from API response
           if (Array.isArray(data?.documents)) {
-            const docMap = new Map(
-              data.documents.map(
-                (d: { doc_type?: string; file_path?: string }) => [
-                  d.doc_type,
-                  d.file_path,
-                ],
-              ),
-            );
+            const updatedDocs = exp.documents.map((d) => {
+              const apiDoc = data.documents.find(
+                (apiD: { doc_type?: string }) => apiD.doc_type === d.doc_type
+              );
+              return apiDoc?.file_path
+                ? { ...d, file_path: apiDoc.file_path, file: undefined } // Store real path, clear File object
+                : d;
+            });
+            
             setExperienceList((prev) => {
               const updated = [...prev];
-              const docs = updated[i].documents.map((d) => ({
-                ...d,
-                file_path: docMap.get(d.doc_type) || d.file_path,
-              }));
-              updated[i] = { ...updated[i], documents: docs };
+              updated[i] = { 
+                ...updated[i], 
+                experience_uuid: data.experience_uuid, // ✅ Persist the ID!
+                documents: updatedDocs 
+              };
+              return updated;
+            });
+          } else {
+            // If no documents in response, still persist the experience_uuid
+            setExperienceList((prev) => {
+              const updated = [...prev];
+              updated[i] = { ...updated[i], experience_uuid: data.experience_uuid };
               return updated;
             });
           }
         }
 
-        // UPDATE metadata
-        else if (old && hasExperienceChanged(old, exp)) {
-          await fetch(
-            `${process.env.NEXT_PUBLIC_API_BASE_URL}/experience/${exp.experience_uuid}`,
-            {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                employee_uuid,
-                company_name: exp.company_name,
-                role_title: exp.role_title,
-                employment_type: exp.employment_type,
-                start_date: exp.start_date,
-                end_date: exp.end_date,
-                is_current: exp.is_current,
-                remarks: exp.remarks,
-              }),
-            },
-          );
-        }
+        // UPDATE metadata and documents together
+        else if (old) {
+          const hasMetadataChanged = hasExperienceChanged(old, exp);
+          const hasNewFiles = exp.documents.some((doc) => doc.file);
 
-        // UPDATE documents
-        if (old) {
-          for (const doc of exp.documents) {
-            const hadDoc = old.documents.some(
-              (d) => d.doc_type === doc.doc_type,
+          // Only make request if something changed
+          if (hasMetadataChanged || hasNewFiles) {
+            const form = new FormData();
+            
+            // Add metadata
+            form.append("employee_uuid", employee_uuid);
+            form.append("company_name", exp.company_name);
+            form.append("role_title", exp.role_title);
+            form.append("employment_type", exp.employment_type);
+            form.append("start_date", exp.start_date);
+            if (exp.end_date) form.append("end_date", exp.end_date);
+            form.append("is_current", String(exp.is_current));
+            form.append("remarks", exp.remarks);
+
+            // Add new documents
+            for (const doc of exp.documents) {
+              if (doc.file) {
+                form.append("doc_types", doc.doc_type);
+                form.append("files", doc.file);
+              }
+            }
+
+            const res = await fetch(
+              `${process.env.NEXT_PUBLIC_API_BASE_URL}/experience/${exp.experience_uuid}`,
+              { method: "PUT", body: form },
             );
+            if (!res.ok) throw new Error();
 
-            if (!hadDoc) {
-              const form = new FormData();
-              form.append("file", doc.file);
-              const res = await fetch(
-                `${process.env.NEXT_PUBLIC_API_BASE_URL}/experience/certificate/${exp.experience_uuid}/`,
-                { method: "PUT", body: form },
-              );
-              if (!res.ok) throw new Error();
-              const filePath = await resolveFilePath(res);
-              if (filePath) {
+            // Update file paths from response if documents were uploaded
+            if (hasNewFiles && Array.isArray(res)) {
+              const data = await res.json();
+              if (Array.isArray(data?.documents)) {
                 setExperienceList((prev) => {
                   const updated = [...prev];
-                  const docs = updated[i].documents.map((d) =>
-                    d.doc_type === doc.doc_type ? { ...d, file_path: filePath } : d
-                  );
+                  const docs = updated[i].documents.map((d) => {
+                    const apiDoc = data.documents.find(
+                      (apiD: { doc_type?: string }) => apiD.doc_type === d.doc_type
+                    );
+                    return apiDoc?.file_path
+                      ? { ...d, file_path: apiDoc.file_path, file: undefined }
+                      : d;
+                  });
                   updated[i] = { ...updated[i], documents: docs };
                   return updated;
                 });
@@ -418,9 +460,10 @@ export default function ExperienceDetailsPage() {
                         const existing = exp.documents.find(
                           (d) => d.doc_type === doc,
                         );
-                        if (existing?.file) return existing.file.name;
+                        if (existing?.file instanceof File) return existing.file.name;
                         if (existing?.file_path) {
-                          return existing.file_path.split("/").pop();
+                          // Show filename from full path for clarity
+                          return existing.file_path.split("/").pop() || existing.file_path;
                         }
                         return "No file chosen";
                       })()}

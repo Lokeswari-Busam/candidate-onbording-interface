@@ -369,7 +369,7 @@ function Row({ children }: RowProps) {
             <input
               type="date"
               name="date_of_birth"
-              value={formData.date_of_birth}
+              value={formData?.date_of_birth || ""}
               onChange={handleChange}
               style={inputStyle}
             />
@@ -378,7 +378,7 @@ function Row({ children }: RowProps) {
           <Field label="Gender">
             <select
               name="gender"
-              value={formData.gender}
+              value={formData?.gender || ""}
               onChange={handleChange}
               style={inputStyle}
             >
@@ -392,7 +392,7 @@ function Row({ children }: RowProps) {
           <Field label="Marital Status">
             <select
               name="marital_status"
-              value={formData.marital_status}
+              value={formData?.marital_status || ""}
               onChange={handleChange}
               style={inputStyle}
             >
@@ -405,7 +405,7 @@ function Row({ children }: RowProps) {
           <Field label="Blood Group">
             <select
               name="blood_group"
-              value={formData.blood_group}
+              value={formData?.blood_group || ""}
               onChange={handleChange}
               style={inputStyle}
             >
@@ -424,7 +424,7 @@ function Row({ children }: RowProps) {
           <Field label="Nationality">
             <select
               name="nationality_country_uuid"
-              value={formData.nationality_country_uuid}
+              value={formData?.nationality_country_uuid || ""}
               onChange={handleChange}
               style={inputStyle}
             >
@@ -440,7 +440,7 @@ function Row({ children }: RowProps) {
           <Field label="Residence Country">
             <select
               name="residence_country_uuid"
-              value={formData.residence_country_uuid}
+              value={formData?.residence_country_uuid || ""}
               onChange={handleChange}
               style={inputStyle}
             >
@@ -458,7 +458,7 @@ function Row({ children }: RowProps) {
                  <label style={labelStyle}>Emergency Country Code</label>
                 <select
                   name="emergency_country_uuid"
-                  value={formData.emergency_country_uuid}
+                  value={formData?.emergency_country_uuid || ""}
                   onChange={handleChange}
                   style={inputStyle}
                   required
@@ -476,7 +476,7 @@ function Row({ children }: RowProps) {
                 <label style={labelStyle}>Emergency Contact</label>
                 <input
                   name="emergency_contact"
-                  value={formData.emergency_contact}
+                  value={formData?.emergency_contact || ""}
                   onChange={(e) => {
                     const val = e.target.value.replace(/\D/g, "");
                     setFormData((prev) => ({ ...prev, emergency_contact: val }));

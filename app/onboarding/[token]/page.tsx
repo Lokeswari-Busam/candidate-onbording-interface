@@ -57,8 +57,9 @@ export default function Page() {
       if (!res.ok) {
         throw new Error(data?.message || "Failed to send OTP");
       }
-
+      console.log("OTP sent to email:", data);
       toast.success("OTP sent successfully");
+      
       setStep(2);
       setTimer(30);
     } catch (err: unknown) {
