@@ -30,10 +30,12 @@ export const useEducationData = ({
   useEffect(() => {
     if (!token) return;
 
+    if (userUuid) return;
+
     fetchUserUuid(base, token)
       .then((uuid) => setUserUuid(uuid))
       .catch(() => onError("Invalid onboarding link"));
-  }, [base, token, onError]);
+  }, [base, token, onError, userUuid]);
 
   useEffect(() => {
     if (!countryUuid) return; // Skip if countryUuid is not loaded
