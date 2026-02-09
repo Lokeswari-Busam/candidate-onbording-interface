@@ -57,7 +57,7 @@ export const useEducationData = ({
         setUploadedMap(map);
       })
       .catch(() => onError("Failed to load uploaded documents"));
-  }, [base, token, onError]);
+  }, [base, token, onError, userUuid]);
 
   return {
     rows,
