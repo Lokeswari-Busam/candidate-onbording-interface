@@ -90,7 +90,9 @@ export default function EducationDetailsPage() {
   );
 
   const orderedDrafts = useMemo(() => {
-    const merged = mergeBackendAndLocal(backendDraftByLevel, educationDetails);
+    const hasRealUpload = Object.keys(uploadedMap).length > 0;
+    if (!userUuid || !hasRealUpload) return [];
+    const merged =  mergeBackendAndLocal(backendDraftByLevel, educationDetails);
     return [...merged].sort((a, b) => {
       const aIndex = EDUCATION_HIERARCHY.indexOf(a.education_name);
       const bIndex = EDUCATION_HIERARCHY.indexOf(b.education_name);
@@ -101,7 +103,7 @@ export default function EducationDetailsPage() {
       if (bIndex === -1) return -1;
       return aIndex - bIndex;
     });
-  }, [backendDraftByLevel, educationDetails]);
+  }, [backendDraftByLevel, educationDetails, userUuid, uploadedMap]);
 
   const draftByLevel = useMemo(() => {
     const map: Record<string, Education> = {};
@@ -111,14 +113,30 @@ export default function EducationDetailsPage() {
     return map;
   }, [orderedDrafts]);
 
+  // useEffect(() => {
+  //   if (orderedDrafts.length === 0 && educationDetails.length === 0) return;
+  //   const next = JSON.stringify(orderedDrafts);
+  //   const current = JSON.stringify(educationDetails);
+  //   if (next !== current) {
+  //     setEducationDetails(orderedDrafts);
+  //   }
+  // }, [orderedDrafts, educationDetails, setEducationDetails]);
+
   useEffect(() => {
-    if (orderedDrafts.length === 0 && educationDetails.length === 0) return;
-    const next = JSON.stringify(orderedDrafts);
-    const current = JSON.stringify(educationDetails);
-    if (next !== current) {
-      setEducationDetails(orderedDrafts);
-    }
-  }, [orderedDrafts, educationDetails, setEducationDetails]);
+  // ❌ DO NOT auto-write when there is no real education for this candidate
+  if (!userUuid) return;
+
+  // If local storage empty AND no backend docs → do nothing
+  if (educationDetails.length === 0 && orderedDrafts.length === 0) return;
+
+  const next = JSON.stringify(orderedDrafts);
+  const current = JSON.stringify(educationDetails);
+
+  if (next !== current) {
+    setEducationDetails(orderedDrafts);
+  }
+}, [orderedDrafts, educationDetails, setEducationDetails, userUuid]);
+
 
   // ✅ NOW WE CAN CHECK AND CONDITIONALLY RENDER
   if (countryUuid === null) {
