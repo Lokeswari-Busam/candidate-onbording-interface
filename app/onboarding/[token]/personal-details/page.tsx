@@ -252,6 +252,18 @@ export default function PersonalDetailsPage() {
           })
         );
 
+        // ⭐ Save Emergency Contact using Contacts API
+        await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/masters/contacts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_uuid: offer.user_uuid,
+            country_uuid: formData.emergency_country_uuid,
+            contact_number: formData.contact_number || "",   // optional primary number
+            emergency_contact: formData.emergency_contact,   // ⭐ your emergency number
+          }),
+        });
+        
         toast.success("Personal details saved successfully");
       }
 

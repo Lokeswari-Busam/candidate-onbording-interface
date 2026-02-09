@@ -103,6 +103,8 @@ export default function OnboardingPreviewPage() {
 
   const [mounted, setMounted] = useState(false);
 
+  const isSubmittedRef = React.useRef(false);
+
 
   const getAddressDisplayName = (type?: string) => {
   if (!type) return "Address";
@@ -175,10 +177,13 @@ export default function OnboardingPreviewPage() {
 
   useEffect(() => {
     if (!mounted || !token) return;
+    if (isSubmittedRef.current) return;
 
     let cancelled = false;
 
     const backfillEducation = async () => {
+      if (isSubmittedRef.current) return;
+      if (educationDetails.length === 0) return;
       const hasMissing = educationDetails.some((edu) =>
         edu.documents?.some((doc) => !doc.file_path),
       );
@@ -367,9 +372,6 @@ const educationList = useMemo<Education[]>(() => {
 
   const isSubmitDisabled = !confirmed || !isDataComplete || loading;
 
-  
-
-
   /* ===================== SUBMIT ===================== */
 
   const handleSubmit = async () => {
@@ -401,6 +403,8 @@ const educationList = useMemo<Education[]>(() => {
       );
 
       if (!res.ok) throw new Error();
+
+      isSubmittedRef.current = true;
 
       /* ✅ CLEAR DRAFT ONLY AFTER SUCCESS */
       clearPersonal();
