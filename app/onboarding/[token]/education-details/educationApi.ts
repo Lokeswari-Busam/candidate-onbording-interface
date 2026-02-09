@@ -14,9 +14,9 @@ export const fetchEducationMapping = async (
   return Array.isArray(data) ? (data as MappingRow[]) : [];
 };
 
-export const fetchUploadedDocs = async (base: string, token: string) => {
+export const fetchUploadedDocs = async (base: string, userUuid: string) => {
   const res = await fetch(
-    `${base}/education/employee-education-document?token=${token}`,
+    `${base}/education/employee-education-document/${userUuid}`,
   );
   const data = await res.json();
   return Array.isArray(data) ? (data as UploadedDoc[]) : [];

@@ -45,7 +45,9 @@ export default function EducationDetailsPage() {
         if (parsed.nationality_country_uuid) {
           setCountryUuid(parsed.nationality_country_uuid);
         } else {
-          setError("Please complete Personal Details first to set your nationality");
+          setError(
+            "Please complete Personal Details first to set your nationality",
+          );
         }
       } else {
         setError("Please complete Personal Details first");
@@ -65,11 +67,9 @@ export default function EducationDetailsPage() {
   // ✅ ALL HOOKS MUST BE CALLED HERE (UNCONDITIONALLY)
   const grouped = useMemo(() => groupRows(rows), [rows]);
 
-  const [educationDetails, setEducationDetails] =
-    useLocalStorageForm<Education[]>(
-      `education-details-${token}`,
-      [],
-    );
+  const [educationDetails, setEducationDetails] = useLocalStorageForm<
+    Education[]
+  >(`education-details-${token}`, []);
 
   const [activeLevel, setActiveLevel] = useState<string | null>(null);
 
@@ -80,9 +80,22 @@ export default function EducationDetailsPage() {
     percentage_cgpa: "",
   });
 
-  const activeRows = activeLevel ? (grouped[activeLevel] ?? []) : [];
-
   const [files, setFiles] = useState<Record<string, File | null>>({});
+
+  // ✅ Reset form state when token changes to prevent data bleed
+  useEffect(() => {
+    setActiveLevel(null);
+    setForm({
+      institution_name: "",
+      specialization: "",
+      year_of_passing: "",
+      percentage_cgpa: "",
+    });
+    setFiles({});
+    setError("");
+  }, [token]);
+
+  const activeRows = activeLevel ? (grouped[activeLevel] ?? []) : [];
 
   const backendDraftByLevel = useMemo(
     () => buildBackendDraftByLevel(rows, uploadedMap),
@@ -92,7 +105,7 @@ export default function EducationDetailsPage() {
   const orderedDrafts = useMemo(() => {
     const hasRealUpload = Object.keys(uploadedMap).length > 0;
     if (!userUuid || !hasRealUpload) return [];
-    const merged =  mergeBackendAndLocal(backendDraftByLevel, educationDetails);
+    const merged = mergeBackendAndLocal(backendDraftByLevel, educationDetails);
     return [...merged].sort((a, b) => {
       const aIndex = EDUCATION_HIERARCHY.indexOf(a.education_name);
       const bIndex = EDUCATION_HIERARCHY.indexOf(b.education_name);
@@ -123,20 +136,19 @@ export default function EducationDetailsPage() {
   // }, [orderedDrafts, educationDetails, setEducationDetails]);
 
   useEffect(() => {
-  // ❌ DO NOT auto-write when there is no real education for this candidate
-  if (!userUuid) return;
+    // ❌ DO NOT auto-write when there is no real education for this candidate
+    if (!userUuid) return;
 
-  // If local storage empty AND no backend docs → do nothing
-  if (educationDetails.length === 0 && orderedDrafts.length === 0) return;
+    // If local storage empty AND no backend docs → do nothing
+    if (educationDetails.length === 0 && orderedDrafts.length === 0) return;
 
-  const next = JSON.stringify(orderedDrafts);
-  const current = JSON.stringify(educationDetails);
+    const next = JSON.stringify(orderedDrafts);
+    const current = JSON.stringify(educationDetails);
 
-  if (next !== current) {
-    setEducationDetails(orderedDrafts);
-  }
-}, [orderedDrafts, educationDetails, setEducationDetails, userUuid]);
-
+    if (next !== current) {
+      setEducationDetails(orderedDrafts);
+    }
+  }, [orderedDrafts, educationDetails, setEducationDetails, userUuid]);
 
   // ✅ NOW WE CAN CHECK AND CONDITIONALLY RENDER
   if (countryUuid === null) {
@@ -252,7 +264,10 @@ export default function EducationDetailsPage() {
         if (!existing) {
           hasAnyChange = true;
 
-          const saved: UploadedDoc = await createEducationDocument(base, payload);
+          const saved: UploadedDoc = await createEducationDocument(
+            base,
+            payload,
+          );
           nextUploadedMap = {
             ...nextUploadedMap,
             [row.mapping_uuid]: saved,

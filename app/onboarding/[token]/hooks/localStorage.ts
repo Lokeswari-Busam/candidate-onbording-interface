@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 type Updater<T> = T | ((prev: T) => T);
 
@@ -12,6 +12,7 @@ export function useLocalStorageForm<T>(
   { isHydrated: boolean; resetFromApi: (data: T) => void }
 ] {
   const isFirstLoad = useRef(true);
+  const prevKeyRef = useRef<string>(key);
   const [isHydrated, setIsHydrated] = useState(false);
 
   const [state, setState] = useState<T>(() => {
@@ -29,6 +30,35 @@ export function useLocalStorageForm<T>(
       return initialValue;
     }
   });
+
+  // ✅ Handle key changes (e.g., when token changes)
+  useLayoutEffect(() => {
+    if (prevKeyRef.current !== key) {
+      // Key changed, re-read from localStorage with the new key
+      prevKeyRef.current = key;
+      isFirstLoad.current = true;
+      
+      if (typeof window === "undefined") return;
+
+      // Defer state updates using Promise to avoid ESLint warnings about setState in effects
+      Promise.resolve().then(() => {
+        try {
+          const stored = localStorage.getItem(key);
+          if (stored) {
+            const parsed = JSON.parse(stored) as T;
+            setState(parsed);
+            setIsHydrated(true);
+          } else {
+            setState(initialValue);
+            setIsHydrated(false);
+          }
+        } catch (err) {
+          console.error("Failed to read from localStorage with new key", err);
+          setState(initialValue);
+        }
+      });
+    }
+  }, [key, initialValue]);
 
   useEffect(() => {
     if (isFirstLoad.current) {

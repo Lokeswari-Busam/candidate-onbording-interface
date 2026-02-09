@@ -48,7 +48,7 @@ export const useEducationData = ({
   useEffect(() => {
     if (!token) return;
 
-    fetchUploadedDocs(base, token)
+    fetchUploadedDocs(base , userUuid)
       .then((docs) => {
         const map: Record<string, UploadedDoc> = {};
         docs.forEach((doc) => {
