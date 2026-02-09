@@ -9,19 +9,17 @@ import { EDUCATION_HIERARCHY } from "./constants";
 import EducationModal from "./EducationModal";
 import EducationTimeline from "./EducationTimeline";
 import {
-  createEducationDocument,
-  updateEducationDocument,
-} from "./educationApi";
-import {
-  buildBackendDraftByLevel,
   groupRows,
   hasEducationChanged,
   isEmptyValue,
-  mergeBackendAndLocal,
   normalizeDraft,
 } from "./educationUtils";
 import type { CommonForm, Education, UploadedDoc } from "./types";
 import { useEducationData } from "./useEducationData";
+import {
+  createEducationDocument,
+  updateEducationDocument,
+} from "./educationApi";
 
 export default function EducationDetailsPage() {
   const { token } = useParams<{ token: string }>();
@@ -31,10 +29,12 @@ export default function EducationDetailsPage() {
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mappingLoaded, setMappingLoaded] = useState(false);
   const { setLoading: setGlobalLoading } = useGlobalLoading();
 
   // Fetch nationality_country_uuid from personal details localStorage
   const [countryUuid, setCountryUuid] = useState<string | null>(null);
+  const [countryUuidLoaded, setCountryUuidLoaded] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -54,6 +54,8 @@ export default function EducationDetailsPage() {
       }
     } catch {
       setError("Failed to load country information from personal details");
+    } finally {
+      setCountryUuidLoaded(true);
     }
   }, [token]);
 
@@ -64,9 +66,23 @@ export default function EducationDetailsPage() {
     onError: setError,
   });
 
+  // ✅ Mark mapping as loaded once we have rows or if countryUuid is not available
+  useEffect(() => {
+    if (countryUuid && rows.length > 0) {
+      setMappingLoaded(true);
+    } else if (countryUuid && error) {
+      // If we have countryUuid and an error occurred, mapping is also loaded (with error)
+      setMappingLoaded(true);
+    } else if (!countryUuid && countryUuidLoaded) {
+      // If no countryUuid after loading, mapping is not applicable
+      setMappingLoaded(true);
+    }
+  }, [rows, countryUuid, error, countryUuidLoaded]);
+
   // ✅ ALL HOOKS MUST BE CALLED HERE (UNCONDITIONALLY)
   const grouped = useMemo(() => groupRows(rows), [rows]);
 
+  // ✅ Load education details from localStorage ONLY (not from backend)
   const [educationDetails, setEducationDetails] = useLocalStorageForm<
     Education[]
   >(`education-details-${token}`, []);
@@ -97,61 +113,17 @@ export default function EducationDetailsPage() {
 
   const activeRows = activeLevel ? (grouped[activeLevel] ?? []) : [];
 
-  const backendDraftByLevel = useMemo(
-    () => buildBackendDraftByLevel(rows, uploadedMap),
-    [rows, uploadedMap],
-  );
-
-  const orderedDrafts = useMemo(() => {
-    const hasRealUpload = Object.keys(uploadedMap).length > 0;
-    if (!userUuid || !hasRealUpload) return [];
-    const merged = mergeBackendAndLocal(backendDraftByLevel, educationDetails);
-    return [...merged].sort((a, b) => {
-      const aIndex = EDUCATION_HIERARCHY.indexOf(a.education_name);
-      const bIndex = EDUCATION_HIERARCHY.indexOf(b.education_name);
-      if (aIndex === -1 && bIndex === -1) {
-        return a.education_name.localeCompare(b.education_name);
-      }
-      if (aIndex === -1) return 1;
-      if (bIndex === -1) return -1;
-      return aIndex - bIndex;
-    });
-  }, [backendDraftByLevel, educationDetails, userUuid, uploadedMap]);
-
+  // ✅ Create lookup map for localStorage education details
   const draftByLevel = useMemo(() => {
     const map: Record<string, Education> = {};
-    orderedDrafts.forEach((draft) => {
+    educationDetails.forEach((draft) => {
       map[draft.education_name] = draft;
     });
     return map;
-  }, [orderedDrafts]);
-
-  // useEffect(() => {
-  //   if (orderedDrafts.length === 0 && educationDetails.length === 0) return;
-  //   const next = JSON.stringify(orderedDrafts);
-  //   const current = JSON.stringify(educationDetails);
-  //   if (next !== current) {
-  //     setEducationDetails(orderedDrafts);
-  //   }
-  // }, [orderedDrafts, educationDetails, setEducationDetails]);
-
-  useEffect(() => {
-    // ❌ DO NOT auto-write when there is no real education for this candidate
-    if (!userUuid) return;
-
-    // If local storage empty AND no backend docs → do nothing
-    if (educationDetails.length === 0 && orderedDrafts.length === 0) return;
-
-    const next = JSON.stringify(orderedDrafts);
-    const current = JSON.stringify(educationDetails);
-
-    if (next !== current) {
-      setEducationDetails(orderedDrafts);
-    }
-  }, [orderedDrafts, educationDetails, setEducationDetails, userUuid]);
+  }, [educationDetails]);
 
   // ✅ NOW WE CAN CHECK AND CONDITIONALLY RENDER
-  if (countryUuid === null) {
+  if (!countryUuidLoaded || !mappingLoaded) {
     return (
       <div style={pageWrapper}>
         <div style={cardStyle}>
@@ -161,7 +133,7 @@ export default function EducationDetailsPage() {
     );
   }
 
-  if (error && countryUuid === null) {
+  if (error) {
     return (
       <div style={pageWrapper}>
         <div style={cardStyle}>
@@ -190,6 +162,7 @@ export default function EducationDetailsPage() {
       setError("User not initialized. Please reload the page.");
       return;
     }
+    
     /* ===================== COMMON FIELD VALIDATION ===================== */
     if (
       isEmptyValue(form.institution_name) ||
@@ -216,7 +189,7 @@ export default function EducationDetailsPage() {
       return;
     }
 
-    /* ===================== HIERARCHY VALIDATION (ONCE) ===================== */
+    /* ===================== HIERARCHY VALIDATION ===================== */
     const currentIndex = EDUCATION_HIERARCHY.indexOf(activeLevel);
 
     if (currentIndex > 0) {
@@ -237,7 +210,7 @@ export default function EducationDetailsPage() {
       }
     }
 
-    /* ===================== SAVE ===================== */
+    /* ===================== SAVE TO BACKEND + LOCALSTORAGE ===================== */
     setLoading(true);
     setGlobalLoading(true);
     setError("");
@@ -245,6 +218,8 @@ export default function EducationDetailsPage() {
     try {
       let nextUploadedMap = { ...uploadedMap };
       let hasAnyChange = false;
+
+      // ✅ STEP 1: Upload/Update documents to backend
       for (const row of activeRows) {
         const file = files[row.mapping_uuid];
         const existing = nextUploadedMap[row.mapping_uuid];
@@ -292,13 +267,14 @@ export default function EducationDetailsPage() {
           // skip
         }
       }
+
       if (!hasAnyChange) {
         toast.success("No changes to save");
       }
 
       setUploadedMap(nextUploadedMap);
 
-      // ✅ SAVE TO LOCAL STORAGE FOR PREVIEW PAGE
+      // ✅ STEP 2: SAVE TO LOCAL STORAGE (always, for form data persistence)
       setEducationDetails((prev) => {
         const filtered = prev.filter((e) => e.education_name !== activeLevel);
         const nextDraft: Education = normalizeDraft({

@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import type { MappingRow, UploadedDoc } from "./types";
 import {
   fetchEducationMapping,
-  fetchUploadedDocs,
   fetchUserUuid,
 } from "./educationApi";
 
@@ -30,12 +29,10 @@ export const useEducationData = ({
   useEffect(() => {
     if (!token) return;
 
-    if (userUuid) return;
-
     fetchUserUuid(base, token)
       .then((uuid) => setUserUuid(uuid))
       .catch(() => onError("Invalid onboarding link"));
-  }, [base, token, onError, userUuid]);
+  }, [base, token, onError]);
 
   useEffect(() => {
     if (!countryUuid) return; // Skip if countryUuid is not loaded
@@ -46,20 +43,6 @@ export const useEducationData = ({
       })
       .catch(() => onError("Failed to load education mapping"));
   }, [base, countryUuid, onError]);
-
-  useEffect(() => {
-    if (!token) return;
-
-    fetchUploadedDocs(base , userUuid)
-      .then((docs) => {
-        const map: Record<string, UploadedDoc> = {};
-        docs.forEach((doc) => {
-          map[doc.mapping_uuid] = doc;
-        });
-        setUploadedMap(map);
-      })
-      .catch(() => onError("Failed to load uploaded documents"));
-  }, [base, token, onError, userUuid]);
 
   return {
     rows,
