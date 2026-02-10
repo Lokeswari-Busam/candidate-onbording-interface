@@ -24,18 +24,24 @@ export default function EducationTimeline({
           .map((r) => uploadedMap[r.mapping_uuid])
           .filter(Boolean);
 
-        const commonComplete = draft
+        // ✅ Check if common fields are filled in localStorage
+        const commonFilledInStorage = draft
           ? !isEmptyValue(draft.institution_name) &&
             !isEmptyValue(draft.specialization) &&
             !isEmptyValue(draft.year_of_passing) &&
             !isEmptyValue(draft.percentage_cgpa)
           : false;
 
+        // ✅ Check if all required documents are uploaded to backend
         const requiredDocsComplete = rows.every(
           (row) => !row.is_mandatory || uploadedMap[row.mapping_uuid],
         );
 
-        const completed = commonComplete && requiredDocsComplete;
+        // ✅ Show expanded details if form is filled in localStorage (regardless of docs)
+        const showExpandedDetails = commonFilledInStorage;
+
+        // ✅ Mark as completed only if both form AND docs are done
+        const completed = commonFilledInStorage && requiredDocsComplete;
 
         const anyFieldFilled = draft
           ? !isEmptyValue(draft.institution_name) ||
@@ -63,15 +69,17 @@ export default function EducationTimeline({
                 className={`h-4 w-4 rounded-full ${
                   completed
                     ? "bg-green-500"
-                    : inProgress
-                      ? "bg-blue-500"
-                      : "bg-gray-300"
+                    : showExpandedDetails
+                      ? "bg-yellow-500"
+                      : inProgress
+                        ? "bg-blue-500"
+                        : "bg-gray-300"
                 }`}
               />
               {index !== Object.keys(grouped).length - 1 && (
                 <div
                   className={`w-0.5 flex-1 ${
-                    completed ? "bg-green-500" : "bg-gray-300"
+                    completed ? "bg-green-500" : showExpandedDetails ? "bg-yellow-500" : "bg-gray-300"
                   }`}
                 />
               )}
@@ -85,9 +93,11 @@ export default function EducationTimeline({
                   <p className="text-sm text-gray-500">
                     {completed
                       ? "Completed"
-                      : inProgress
-                        ? "In progress"
-                        : "Not started"}
+                      : showExpandedDetails
+                        ? "Form filled - Documents pending"
+                        : inProgress
+                          ? "In progress"
+                          : "Not started"}
                   </p>
                 </div>
 
@@ -105,7 +115,7 @@ export default function EducationTimeline({
               </div>
 
               {/* EXPANDABLE SUMMARY */}
-              {completed && (
+              {showExpandedDetails && (
                 <div className="mt-4 rounded-md border bg-gray-50 p-5 space-y-4">
                   {/* COMMON DETAILS */}
                   <div className="grid grid-cols-2 gap-4 text-sm">
@@ -148,9 +158,9 @@ export default function EducationTimeline({
 
                   {/* DOCUMENTS */}
                   <div className="space-y-3">
+                    <p className="text-sm font-medium text-slate-700">Documents:</p>
                     {rows.map((row) => {
                       const doc = uploadedMap[row.mapping_uuid];
-                      if (!doc) return null;
 
                       return (
                         <div
@@ -164,9 +174,15 @@ export default function EducationTimeline({
                             )}
                           </p>
 
-                          <p className="text-sm text-blue-600 mt-1">
-                            📄 {doc.file_path?.split("/").pop()}
-                          </p>
+                          {doc ? (
+                            <p className="text-sm text-blue-600 mt-1">
+                              📄 {doc.file_path?.split("/").pop()}
+                            </p>
+                          ) : (
+                            <p className="text-sm text-orange-600 mt-1">
+                              ⏳ Pending upload
+                            </p>
+                          )}
                         </div>
                       );
                     })}

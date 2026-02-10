@@ -59,7 +59,7 @@ export default function EducationDetailsPage() {
     }
   }, [token]);
 
-  const { rows, uploadedMap, setUploadedMap, userUuid } = useEducationData({
+  const { rows, uploadedMap: backendUploadedMap, setUploadedMap: setBackendUploadedMap, userUuid } = useEducationData({
     base,
     token,
     countryUuid: countryUuid || "",
@@ -87,6 +87,44 @@ export default function EducationDetailsPage() {
     Education[]
   >(`education-details-${token}`, []);
 
+  // ✅ Load and persist uploadedMap to localStorage
+  const [uploadedMap, setUploadedMapState] = useState<Record<string, UploadedDoc>>({});
+
+  useEffect(() => {
+    if (!token) return;
+    try {
+      const stored = localStorage.getItem(`uploaded-docs-${token}`);
+      if (stored) {
+        setUploadedMapState(JSON.parse(stored));
+      } else {
+        setUploadedMapState({});
+      }
+    } catch {
+      setUploadedMapState({});
+    }
+  }, [token]);
+
+  // ✅ Merge backend uploadedMap with localStorage on initial load
+  useEffect(() => {
+    if (Object.keys(backendUploadedMap).length > 0) {
+      const merged = { ...uploadedMap, ...backendUploadedMap };
+      setUploadedMapState(merged);
+    }
+  }, [backendUploadedMap]);
+
+  const setUploadedMap = (value: Record<string, UploadedDoc> | ((prev: Record<string, UploadedDoc>) => Record<string, UploadedDoc>)) => {
+    setUploadedMapState((prev) => {
+      const next = typeof value === "function" ? value(prev) : value;
+      // Persist to localStorage
+      try {
+        localStorage.setItem(`uploaded-docs-${token}`, JSON.stringify(next));
+      } catch {
+        console.error("Failed to save uploaded docs to localStorage");
+      }
+      return next;
+    });
+  };
+
   const [activeLevel, setActiveLevel] = useState<string | null>(null);
 
   const [form, setForm] = useState<CommonForm>({
@@ -109,6 +147,17 @@ export default function EducationDetailsPage() {
     });
     setFiles({});
     setError("");
+    // Also reset uploadedMap from localStorage when token changes
+    try {
+      const stored = localStorage.getItem(`uploaded-docs-${token}`);
+      if (stored) {
+        setUploadedMapState(JSON.parse(stored));
+      } else {
+        setUploadedMapState({});
+      }
+    } catch {
+      setUploadedMapState({});
+    }
   }, [token]);
 
   const activeRows = activeLevel ? (grouped[activeLevel] ?? []) : [];
