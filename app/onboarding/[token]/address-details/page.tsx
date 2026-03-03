@@ -404,6 +404,10 @@ if (sameAsPermanent && permanentUuid) {
       <div style={cardStyle}>
         <h2 style={titleStyle}>Address Details</h2>
 
+        <p style={{ fontSize: 13, marginBottom: 16, color: "#374151" }}>
+          <span style={{ color: "#dc2626" }}>*</span> indicates required fields
+        </p>
+
         {error && <p style={{ color: "red" }}>{error}</p>}
 
         <h3 style={sectionTitle}>Permanent Address</h3>
@@ -458,31 +462,61 @@ function AddressFormUI({
 }) {
   return (
     <>
-      <Field label="Address Line 1">
-        <input name="address_line1" value={data.address_line1} onChange={onChange} style={inputStyle} required />
+      <Field label="Address Line 1" required>
+        <input name="address_line1" 
+        value={data.address_line1} 
+        onChange={onChange} 
+        placeholder="Enter House / Flat No., Building Name, Street Name"
+        style={inputStyle} 
+        required />
       </Field>
 
-      <Field label="Address Line 2">
-        <input name="address_line2" value={data.address_line2} onChange={onChange} style={inputStyle} />
+      <Field label="Address Line 2" required>
+        <input name="address_line2" 
+        value={data.address_line2} 
+        onChange={onChange} 
+        placeholder="Area / Locality / landmark" 
+        style={inputStyle} 
+        required />
       </Field>
 
-      <Field label="City">
-        <input name="city" value={data.city} onChange={onChange} style={inputStyle} required />
+      <Field label="City" required>
+        <input name="city" 
+        value={data.city} 
+        onChange={onChange} 
+        placeholder="Enter your City / Near Town"
+        style={inputStyle} 
+        required />
       </Field>
 
-      <Field label="District / Ward">
-        <input name="district_or_ward" value={data.district_or_ward} onChange={onChange} style={inputStyle} required />
+      <Field label="District / Ward" required>
+        <input name="district_or_ward" 
+        value={data.district_or_ward} 
+        onChange={onChange} 
+        placeholder="Enter your District"
+        style={inputStyle} 
+        required />
       </Field>
 
-      <Field label="State / Region">
-        <input name="state_or_region" value={data.state_or_region} onChange={onChange} style={inputStyle} required />
+      <Field label="State / Region" required>
+        <input name="state_or_region" 
+        value={data.state_or_region} 
+        onChange={onChange} 
+        placeholder="Enter your State or Region"
+        style={inputStyle} 
+        required />
       </Field>
 
-      <Field label="Postal Code">
-        <input name="postal_code" value={data.postal_code} onChange={onChange} style={inputStyle} required />
+      <Field label="Postal Code" required>
+        <input name="postal_code" 
+        value={data.postal_code} 
+        onChange={onChange} 
+        placeholder="Enter your Postal Code"
+        style={inputStyle} 
+        required />
       </Field>
 
-      <Field label="Country">
+      <Field label="Country" required>
         <select name="country_uuid" value={data.country_uuid} onChange={onChange} style={inputStyle} required>
           <option value="">Select Country</option>
           {countries.map((c) => (
@@ -498,10 +532,13 @@ function AddressFormUI({
 
 /* ===================== FIELD ===================== */
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label,required = false,children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 16 }}>
-      <label style={labelStyle}>{label}</label>
+      <label style={labelStyle}>
+        {label}
+        {required && <span style={{ color: "red", marginLeft: 4 }}>*</span>}
+        </label>
       {children}
     </div>
   );
