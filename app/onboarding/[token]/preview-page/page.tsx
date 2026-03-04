@@ -20,8 +20,9 @@ interface PersonalDetails {
   blood_group?: string;
   nationality_country_uuid?: string;
   residence_country_uuid?: string;
-  emergency_country_uuid?: string;
-  emergency_contact?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  emergency_contact_relation_uuid?: string;
 }
 
 interface Address {
@@ -39,6 +40,11 @@ interface Country {
   country_uuid: string;
   country_name: string;
   is_active: boolean;
+}
+
+interface Relation {
+    relation_uuid: string;
+    relation_name: string;
 }
 
 
@@ -100,6 +106,7 @@ export default function OnboardingPreviewPage() {
   const [loading, setLoading] = useState(false);
   const { setLoading: setGlobalLoading } = useGlobalLoading();
   const [countries, setCountries] = useState<Country[]>([]);
+  const [relations, setRelations] = useState<Relation[]>([]);
 
   const [mounted, setMounted] = useState(false);
 
@@ -133,6 +140,12 @@ export default function OnboardingPreviewPage() {
         // ignore country lookup errors
       });
   }, []);
+  useEffect(() => {
+  fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/relations`)
+    .then((res) => res.json())
+    .then((data: Relation[]) => setRelations(data))
+    .catch(() => {});
+}, []);
 
   /* ===================== LOCAL STORAGE (TOKEN SCOPED) ===================== */
 
@@ -454,6 +467,12 @@ function getCountryName(countries: Country[], uuid?: string) {
   if (!uuid) return "-";
   return countries.find((c) => c.country_uuid === uuid)?.country_name || uuid;
 }
+function getRelationName(relations: Relation[], uuid?: string) {
+  if (!uuid) return "-";
+  return (
+    relations.find((r) => r.relation_uuid === uuid)?.relation_name || uuid
+  );
+}
 
 
 function Section({
@@ -541,14 +560,20 @@ function Section({
           label="Residence"
           value={getCountryName(countries, personalDetails?.residence_country_uuid)}
         />
-        <PreviewRow
-          label="Emergency Contact"
-          value={personalDetails?.emergency_contact}
-        />
-        <PreviewRow
-          label="Emergency Country"
-          value={getCountryName(countries, personalDetails?.emergency_country_uuid)}
-        />
+       <PreviewRow
+  label="Emergency Contact Name"
+  value={personalDetails?.emergency_contact_name}
+/>
+
+<PreviewRow
+  label="Emergency Contact Phone"
+  value={personalDetails?.emergency_contact_phone}
+/>
+
+<PreviewRow
+  label="Emergency Contact Relation"
+  value={getRelationName(relations, personalDetails?.emergency_contact_relation_uuid)}
+/>
       </div>
     </Section>
 

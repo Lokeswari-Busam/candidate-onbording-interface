@@ -37,8 +37,10 @@ interface PersonalForm {
   blood_group: string;
   nationality_country_uuid: string;
   residence_country_uuid: string;
-  emergency_country_uuid: string;
-  emergency_contact: string;
+  emergency_contact_name: string;
+emergency_contact_phone: string;
+emergency_contact_relation_uuid: string;
+ 
 }
 
 interface FieldProps {
@@ -55,6 +57,11 @@ interface RowProps {
   children: React.ReactNode;
 }
 
+interface Relation {
+  relation_uuid: string;
+  relation_name: string;
+}
+
 /* ===================== COMPONENT ===================== */
 
 export default function PersonalDetailsPage() {
@@ -63,6 +70,7 @@ export default function PersonalDetailsPage() {
   const { setLoading: setGlobalLoading } = useGlobalLoading();
 
   const [countries, setCountries] = useState<Country[]>([]);
+  const [relations, setRelations] = useState<Relation[]>([]);
   const [offer, setOffer] = useState<OfferLetter | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -85,8 +93,9 @@ export default function PersonalDetailsPage() {
       blood_group: "",
       nationality_country_uuid: "",
       residence_country_uuid: "",
-      emergency_country_uuid: "",
-      emergency_contact: "",
+     emergency_contact_name: "",
+emergency_contact_phone: "",
+emergency_contact_relation_uuid: "",
     }
   );
 
@@ -98,6 +107,15 @@ export default function PersonalDetailsPage() {
       .then((data: Country[]) => setCountries(data.filter((c) => c.is_active)))
       .catch(() => setError("Failed to load countries"));
   }, []);
+
+  /* ---------------- FETCH RELATIONS ---------------- */
+
+useEffect(() => {
+  fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/relations`)
+    .then((res) => res.json())
+    .then((data: Relation[]) => setRelations(data))
+    .catch(() => setError("Failed to load relations"));
+}, []);
 
   /* ---------------- TOKEN → OFFER → PERSONAL ---------------- */
 
@@ -179,7 +197,8 @@ export default function PersonalDetailsPage() {
     setLoading(true);
     setGlobalLoading(true);
     setError("");
-
+    console.log("Submitting payload:", formData);
+console.log("personalUuid:", personalUuid);
     try {
       const payload = {
         user_uuid: offer.user_uuid,
@@ -189,11 +208,12 @@ export default function PersonalDetailsPage() {
         blood_group: formData.blood_group,
         nationality_country_uuid: formData.nationality_country_uuid,
         residence_country_uuid: formData.residence_country_uuid,
-        emergency_country_uuid: formData.emergency_country_uuid,
-        emergency_contact: formData.emergency_contact,
+        emergency_contact_name: formData.emergency_contact_name,
+        emergency_contact_phone: formData.emergency_contact_phone,
+        emergency_contact_relation_uuid: formData.emergency_contact_relation_uuid,
       };
 
-      const isSame = (a: PersonalForm | null, b: typeof payload) => {
+      const isSame = (a: PersonalForm | null, b: any) => {
         if (!a) return false;
         return (
           (a.date_of_birth || "") === b.date_of_birth &&
@@ -202,8 +222,9 @@ export default function PersonalDetailsPage() {
           (a.blood_group || "") === b.blood_group &&
           (a.nationality_country_uuid || "") === b.nationality_country_uuid &&
           (a.residence_country_uuid || "") === b.residence_country_uuid &&
-          (a.emergency_country_uuid || "") === b.emergency_country_uuid &&
-          (a.emergency_contact || "") === b.emergency_contact
+          (a.emergency_contact_name || "") === b.emergency_contact_name &&
+          (a.emergency_contact_phone || "") === b.emergency_contact_phone &&
+          (a.emergency_contact_relation_uuid || "") === b.emergency_contact_relation_uuid
         );
       };
       // no changes
@@ -226,8 +247,13 @@ export default function PersonalDetailsPage() {
         if (!res.ok) throw new Error();
 
         const data = await res.json();
-        setPersonalUuid(data.personal_uuid);
-        localStorage.setItem(`personal-uuid-${token}`, data.personal_uuid);
+
+const uuid = data.personal_uuid;
+
+setPersonalUuid(uuid);
+localStorage.setItem(`personal-uuid-${token}`, uuid);
+
+console.log("Saved personalUuid:", uuid);
         setOriginalPersonal({
           date_of_birth: payload.date_of_birth,
           gender: payload.gender,
@@ -235,8 +261,9 @@ export default function PersonalDetailsPage() {
           blood_group: payload.blood_group,
           nationality_country_uuid: payload.nationality_country_uuid,
           residence_country_uuid: payload.residence_country_uuid,
-          emergency_country_uuid: payload.emergency_country_uuid,
-          emergency_contact: payload.emergency_contact,
+          emergency_contact_name: payload.emergency_contact_name,
+emergency_contact_phone: payload.emergency_contact_phone,
+emergency_contact_relation_uuid: payload.emergency_contact_relation_uuid,
         });
         localStorage.setItem(
           `personal-snapshot-${token}`,
@@ -247,22 +274,13 @@ export default function PersonalDetailsPage() {
             blood_group: payload.blood_group,
             nationality_country_uuid: payload.nationality_country_uuid,
             residence_country_uuid: payload.residence_country_uuid,
-            emergency_country_uuid: payload.emergency_country_uuid,
-            emergency_contact: payload.emergency_contact,
+            emergency_contact_name: payload.emergency_contact_name,
+emergency_contact_phone: payload.emergency_contact_phone,
+emergency_contact_relation_uuid: payload.emergency_contact_relation_uuid,
           })
         );
 
-        // ⭐ Save Emergency Contact using Contacts API
-        await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/masters/contacts`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            user_uuid: offer.user_uuid,
-            country_uuid: formData.emergency_country_uuid,
-            contact_number: formData.contact_number || "",   // optional primary number
-            emergency_contact: formData.emergency_contact,   // ⭐ your emergency number
-          }),
-        });
+       
         
         toast.success("Personal details saved successfully");
       }
@@ -287,8 +305,9 @@ export default function PersonalDetailsPage() {
           blood_group: payload.blood_group,
           nationality_country_uuid: payload.nationality_country_uuid,
           residence_country_uuid: payload.residence_country_uuid,
-          emergency_country_uuid: payload.emergency_country_uuid,
-          emergency_contact: payload.emergency_contact,
+          emergency_contact_name: payload.emergency_contact_name,
+          emergency_contact_phone: payload.emergency_contact_phone,
+emergency_contact_relation_uuid: payload.emergency_contact_relation_uuid,
         });
         localStorage.setItem(
           `personal-snapshot-${token}`,
@@ -299,15 +318,18 @@ export default function PersonalDetailsPage() {
             blood_group: payload.blood_group,
             nationality_country_uuid: payload.nationality_country_uuid,
             residence_country_uuid: payload.residence_country_uuid,
-            emergency_country_uuid: payload.emergency_country_uuid,
-            emergency_contact: payload.emergency_contact,
+            emergency_contact_name: payload.emergency_contact_name,
+emergency_contact_phone: payload.emergency_contact_phone,
+emergency_contact_relation_uuid: payload.emergency_contact_relation_uuid,
           })
         );
 
         toast.success("Personal details updated successfully");
       }
 
-      router.push(`/onboarding/${token}/address-details`);
+      setTimeout(() => {
+  router.push(`/onboarding/${token}/address-details`);
+}, 200);
     } catch {
       toast.error("Failed to save personal details");
       setError("Failed to save personal details");
@@ -465,41 +487,45 @@ function Row({ children }: RowProps) {
             </select>
           </Field>
 
-           <Row>        
-            <div style={{ flex: 1 }}>
-                 <label style={labelStyle}>Emergency Country Code</label>
-                <select
-                  name="emergency_country_uuid"
-                  value={formData?.emergency_country_uuid || ""}
-                  onChange={handleChange}
-                  style={inputStyle}
-                  required
-                >
-                  <option value="">Select</option>
-                  {countries.map((c) => (
-                    <option key={c.country_uuid} value={c.country_uuid}>
-                        {c.country_name} {c.country_code ? `(+${c.country_code})` : ""} 
-                    </option>
-                  ))}
-                </select>
-              </div>
+           <Field label="Emergency Contact Name">
+  <input
+    name="emergency_contact_name"
+    value={formData?.emergency_contact_name || ""}
+    onChange={handleChange}
+    style={inputStyle}
+    placeholder="Enter name"
+  />
+</Field>
 
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>Emergency Contact</label>
-                <input
-                  name="emergency_contact"
-                  value={formData?.emergency_contact || ""}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/\D/g, "");
-                    setFormData((prev) => ({ ...prev, emergency_contact: val }));
-                  }}
-                  style={inputStyle}
-                  maxLength={10}
-                  placeholder="Enter number"
-                  required
-                />
-              </div>
-            </Row>
+<Field label="Emergency Contact Phone">
+  <input
+    name="emergency_contact_phone"
+    value={formData?.emergency_contact_phone || ""}
+    onChange={(e) => {
+      const val = e.target.value.replace(/\D/g, "");
+      setFormData((prev) => ({ ...prev, emergency_contact_phone: val }));
+    }}
+    style={inputStyle}
+    maxLength={10}
+    placeholder="Enter phone number"
+  />
+</Field>
+
+<Field label="Emergency Contact Relation">
+  <select
+    name="emergency_contact_relation_uuid"
+    value={formData?.emergency_contact_relation_uuid || ""}
+    onChange={handleChange}
+    style={inputStyle}
+  >
+    <option value="">Select Relation</option>
+    {relations.map((r) => (
+      <option key={r.relation_uuid} value={r.relation_uuid}>
+        {r.relation_name}
+      </option>
+    ))}
+  </select>
+</Field>
             <div style={{ textAlign: "right", marginTop: 24 }}>
           <button disabled={isSubmittingRef.current} style={submitBtn} type="submit">{isSubmittingRef.current ? "Saving..." : "Save & Continue"} </button>
           </div>
