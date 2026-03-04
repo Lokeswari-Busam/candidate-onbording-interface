@@ -87,6 +87,37 @@ function isEqual(a: AddressForm, b: AddressForm) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+function validateAddress(address: AddressForm) {
+  const nameRegex = /^[A-Za-z\s\-'.]+$/;
+  const postalRegex = /^\d{6}$/;
+
+  if (!address.address_line1.trim()) return "Address Line 1 is required";
+  if (!address.address_line2.trim()) return "Address Line 2 is required";
+
+  if (!address.city.trim()) return "City is required";
+  if (!nameRegex.test(address.city))
+    return "City must contain only letters";
+
+  if (!address.district_or_ward.trim())
+    return "District / Ward is required";
+  if (!nameRegex.test(address.district_or_ward))
+    return "District / Ward must contain only letters";
+
+  if (!address.state_or_region.trim())
+    return "State / Region is required";
+
+  if (!nameRegex.test(address.state_or_region))
+    return "State must contain only letters";
+
+  if (!postalRegex.test(address.postal_code))
+    return "Postal Code must be exactly 6 digits";
+
+  if (!address.country_uuid)
+    return "Please select a country";
+
+  return null;
+}
+
   /* ---------------- FETCH COUNTRIES ---------------- */
 
   useEffect(() => {
@@ -187,6 +218,30 @@ const handleContinue = async () => {
 
   setError("");
   setGlobalLoading(true);
+
+  // Validate Permanent Address
+  const permanentError = validateAddress(permanent);
+
+  if (permanentError) {
+    toast.error(permanentError);
+    setError(permanentError);
+    setGlobalLoading(false);
+    isSubmittingRef.current = false;
+    return;
+  }
+
+  // Validate Temporary Address
+  if (!sameAsPermanent) {
+    const tempError = validateAddress(current);
+
+    if (tempError) {
+      toast.error(tempError);
+      setError(tempError);
+      setGlobalLoading(false);
+      isSubmittingRef.current = false;
+      return;
+    }
+  }
 
   try {
     if (!userUuid) throw new Error();
@@ -510,7 +565,15 @@ function AddressFormUI({
       <Field label="Postal Code" required>
         <input name="postal_code" 
         value={data.postal_code} 
-        onChange={onChange} 
+        onChange={
+          (e) => {
+            // Allow only digits and limit to 6 characters
+            const value = e.target.value;
+            if (/^\d{0,6}$/.test(value)) {
+              onChange(e);
+            }
+          }
+        } 
         placeholder="Enter your Postal Code"
         style={inputStyle} 
         required />
