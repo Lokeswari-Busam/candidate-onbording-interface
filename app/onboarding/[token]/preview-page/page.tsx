@@ -26,7 +26,7 @@ interface PersonalDetails {
 }
 
 interface Address {
-  address_type: "permanent" | "temporary";
+  address_type: "permanent" | "current";
   address_line1?: string;
   address_line2?: string;
   city?: string;
@@ -122,7 +122,7 @@ export default function OnboardingPreviewPage() {
         case "temporary":
           return "Temporary Address";
         default:
-          return "Address";
+          return "Temporary Address";
       }
     };
 
@@ -348,6 +348,43 @@ export default function OnboardingPreviewPage() {
   const addresses = useMemo<Address[]>(() => {
     return Object.values(addressData);
   }, [addressData]);
+
+ const permanentAddress = addresses.find(
+    (a) => a.address_type === "permanent"
+  );
+
+  const temporaryAddress = addresses.find(
+    (a) => a.address_type === "current"
+  );
+
+  const hasAddressData = (addr?: Address) =>
+    !!(
+      addr?.address_line1?.trim() ||
+      addr?.address_line2?.trim() ||
+      addr?.city?.trim() ||
+      addr?.district_or_ward?.trim() ||
+      addr?.state_or_region?.trim() ||
+      addr?.postal_code?.trim()
+    );
+
+  // If temporary has no data → treat as same
+  const isTemporaryEmpty = !hasAddressData(temporaryAddress);
+
+  // Check if values are same
+  const areAddressesSame =
+    permanentAddress &&
+    temporaryAddress &&
+    permanentAddress.address_line1 === temporaryAddress.address_line1 &&
+    permanentAddress.address_line2 === temporaryAddress.address_line2 &&
+    permanentAddress.city === temporaryAddress.city &&
+    permanentAddress.district_or_ward === temporaryAddress.district_or_ward &&
+    permanentAddress.state_or_region === temporaryAddress.state_or_region &&
+    permanentAddress.postal_code === temporaryAddress.postal_code;
+
+  // FINAL condition
+  const showCombined =
+    permanentAddress &&
+    (isTemporaryEmpty || areAddressesSame);
 
  const identityList = useMemo<IdentityDocument[]>(() => {
   return Array.isArray(identityDraft?.documents)
@@ -582,31 +619,48 @@ function Section({
       title="Address Details"
       onEdit={() => router.push(`/onboarding/${token}/address-details`)}
     >
-      {addresses.map((addr, idx) => (
-        <div
-          key={idx}
-          className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-2"
-        >
-        <h3 className="font-semibold mb-3">
-          {getAddressDisplayName(addr.address_type)}
-        </h3>
+      {showCombined ? (
+        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-2">
+          <h3 className="font-semibold mb-3">
+            Permanent & Temporary Address
+          </h3>
 
- 
-
-          <PreviewRow label="Address Line 1" value={addr.address_line1} />
-          <PreviewRow label="Address Line 2" value={addr.address_line2} />
-          <PreviewRow label="City" value={addr.city} />
-          <PreviewRow
-            label="District / Ward"
-            value={addr.district_or_ward}
-          />
-          <PreviewRow
-            label="State / Region"
-            value={addr.state_or_region}
-          />
-          <PreviewRow label="Postal Code" value={addr.postal_code} />
+          <PreviewRow label="Address Line 1" value={permanentAddress?.address_line1} />
+          <PreviewRow label="Address Line 2" value={permanentAddress?.address_line2} />
+          <PreviewRow label="City" value={permanentAddress?.city} />
+          <PreviewRow label="District / Ward" value={permanentAddress?.district_or_ward} />
+          <PreviewRow label="State / Region" value={permanentAddress?.state_or_region} />
+          <PreviewRow label="Postal Code" value={permanentAddress?.postal_code} />
         </div>
-      ))}
+      ) : (
+        <>
+          {permanentAddress && hasAddressData(permanentAddress) && (
+            <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-2">
+              <h3 className="font-semibold mb-3">Permanent Address</h3>
+
+              <PreviewRow label="Address Line 1" value={permanentAddress.address_line1} />
+              <PreviewRow label="Address Line 2" value={permanentAddress.address_line2} />
+              <PreviewRow label="City" value={permanentAddress.city} />
+              <PreviewRow label="District / Ward" value={permanentAddress.district_or_ward} />
+              <PreviewRow label="State / Region" value={permanentAddress.state_or_region} />
+              <PreviewRow label="Postal Code" value={permanentAddress.postal_code} />
+            </div>
+          )}
+
+          {temporaryAddress && hasAddressData(temporaryAddress) && (
+            <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-2">
+              <h3 className="font-semibold mb-3">Temporary Address</h3>
+
+              <PreviewRow label="Address Line 1" value={temporaryAddress.address_line1} />
+              <PreviewRow label="Address Line 2" value={temporaryAddress.address_line2} />
+              <PreviewRow label="City" value={temporaryAddress.city} />
+              <PreviewRow label="District / Ward" value={temporaryAddress.district_or_ward} />
+              <PreviewRow label="State / Region" value={temporaryAddress.state_or_region} />
+              <PreviewRow label="Postal Code" value={temporaryAddress.postal_code} />
+            </div>
+          )}
+        </>
+      )}
     </Section>
 
     {/* ================= IDENTITY DOCUMENTS ================= */}
@@ -663,22 +717,22 @@ function Section({
           />
 
           {edu.documents?.map((doc, docIdx) => (
-  <div key={docIdx} className="mt-3 space-y-1">
-    <div className="grid grid-cols-3 gap-2">
-      <span className="font-medium">Document Name</span>
-      <span className="col-span-2 text-gray-700">
-        {doc.document_name}
-      </span>
-    </div>
+            <div key={docIdx} className="mt-3 space-y-1">
+              <div className="grid grid-cols-3 gap-2">
+                <span className="font-medium">Document Name</span>
+                <span className="col-span-2 text-gray-700">
+                  {doc.document_name}
+                </span>
+              </div>
 
-    <div className="grid grid-cols-3 gap-2">
-      <span className="font-medium">Uploaded File</span>
-      <span className="col-span-2 text-blue-600">
-        📄 {doc.file_path ? getFileName(doc.file_path) : "No file uploaded"}
-      </span>
-    </div>
-  </div>
-))}
+              <div className="grid grid-cols-3 gap-2">
+                <span className="font-medium">Uploaded File</span>
+                <span className="col-span-2 text-blue-600">
+                  📄 {doc.file_path ? getFileName(doc.file_path) : "No file uploaded"}
+                </span>
+              </div>
+            </div>
+          ))}
 
         </div>
       ))}
