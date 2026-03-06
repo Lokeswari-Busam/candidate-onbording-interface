@@ -338,7 +338,7 @@ const handleContinue = async () => {
     // 🔵 UPDATE
     if (address_uuid) {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/address/${address_uuid}`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/address/${address_uuid}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },

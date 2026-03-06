@@ -76,7 +76,7 @@ interface Experience {
   end_date?: string | null;
   role_title?: string;
   employment_type?: string;
-  is_current?: boolean;
+  is_current?: number;
   notice_period_days?: number;
   // remarks?: string;
   documents?: ExperienceDocument[];
@@ -113,7 +113,7 @@ export default function OnboardingPreviewPage() {
 
   const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { setLoading: setGlobalLoading } = useGlobalLoading();
+  const {setLoading: setGlobalLoading } = useGlobalLoading();
   const [countries, setCountries] = useState<Country[]>([]);
   const [relations, setRelations] = useState<Relation[]>([]);
 
@@ -760,13 +760,13 @@ function Section({
           <PreviewRow label="Company Name" value={exp.company_name} />
           <PreviewRow label="Role / Designation" value={exp.role_title} />
           <PreviewRow label="Start Date" value={exp.start_date} />
-          <PreviewRow label="End Date" value={exp.is_current ? "Present" : exp.end_date} />
+          <PreviewRow label="End Date" value={exp.is_current === 1 ? "Present" : exp.end_date} />
           <PreviewRow
             label="Employment Type"
             value={exp.employment_type}
           />
           
-        {exp.is_current === true && exp.notice_period_days && (
+        {exp.is_current === 1 && exp.notice_period_days !== undefined && (
           <PreviewRow
             label="Notice Period (Days)"
             value={exp.notice_period_days}
