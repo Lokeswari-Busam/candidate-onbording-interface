@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { MappingRow, UploadedDoc } from "./types";
+import type { DegreeMaster, MappingRow, UploadedDoc } from "./types";
 import {
+  fetchDegreeMaster,
   fetchEducationMapping,
+  fetchEducationLevel,
   fetchUserUuid,
 } from "./educationApi";
 
@@ -24,6 +26,7 @@ export const useEducationData = ({
   const [uploadedMap, setUploadedMap] = useState<Record<string, UploadedDoc>>(
     {},
   );
+  const [degrees, setDegrees] = useState<DegreeMaster[]>([]);
   const [userUuid, setUserUuid] = useState("");
 
   useEffect(() => {
@@ -37,11 +40,59 @@ export const useEducationData = ({
   useEffect(() => {
     if (!countryUuid) return; // Skip if countryUuid is not loaded
 
-    fetchEducationMapping(base, countryUuid)
-      .then((data) => {
-        setRows(data);
+    Promise.all([
+      fetchEducationMapping(base, countryUuid),
+      fetchEducationLevel(base)
+    ])
+      .then(async ([mappingData, educationLevelData]) => {
+        setRows(mappingData);
+
+        // Create a lookup map: education_name -> education_uuid
+        const nameToUuidMap = new Map<string, string>();
+        educationLevelData.forEach(edu => {
+          if (edu.education_name && edu.education_uuid) {
+            // Normalize case for matching
+            nameToUuidMap.set(edu.education_name.trim().toLowerCase(), edu.education_uuid);
+          }
+        });
+
+        // Extract unique education UUIDs from the mapping rows by looking up their names
+        const educationMap = new Map<string, string>();
+        mappingData.forEach(row => {
+          if (row.education_name) {
+            const normalizedName = row.education_name.trim().toLowerCase();
+            const eduUuid = nameToUuidMap.get(normalizedName);
+            if (eduUuid) {
+              educationMap.set(eduUuid, row.education_name);
+            } else {
+              console.warn(`Could not find UUID for education level: ${row.education_name}`);
+            }
+          }
+        });
+
+        const uniqueUuids = Array.from(educationMap.keys());
+
+        try {
+          // Fetch degrees for all unique matched education levels
+          const degreePromises = uniqueUuids.map(uuid =>
+            fetchDegreeMaster(base, uuid).then(degrees =>
+              // Attach education_name to each degree so the UI can filter them
+              degrees.map(d => ({ ...d, education_name: educationMap.get(uuid) }))
+            )
+          );
+
+          const results = await Promise.all(degreePromises);
+          // Flatten array of arrays and filter active
+          const allDegrees = results.flat().filter((d) => d.is_active !== false);
+          setDegrees(allDegrees);
+        } catch (error) {
+          console.error("Failed to load degree data", error);
+        }
       })
-      .catch(() => onError("Failed to load education mapping"));
+      .catch((error) => {
+        console.error(error);
+        onError("Failed to load education data");
+      });
   }, [base, countryUuid, onError]);
 
   return {
@@ -49,5 +100,6 @@ export const useEducationData = ({
     uploadedMap,
     setUploadedMap,
     userUuid,
+    degrees,
   };
 };

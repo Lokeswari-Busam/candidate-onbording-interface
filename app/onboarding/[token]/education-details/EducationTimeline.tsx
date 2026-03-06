@@ -1,12 +1,14 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
 import { isEmptyValue } from "./educationUtils";
-import type { Education, MappingRow, UploadedDoc } from "./types";
+import type { DegreeMaster, Education, MappingRow, UploadedDoc } from "./types";
 
 type EducationTimelineProps = {
   grouped: Record<string, MappingRow[]>;
   uploadedMap: Record<string, UploadedDoc>;
   draftByLevel: Record<string, Education>;
+  degrees: DegreeMaster[];
   onOpenLevel: (level: string) => void;
 };
 
@@ -14,11 +16,46 @@ export default function EducationTimeline({
   grouped,
   uploadedMap,
   draftByLevel,
+  degrees,
   onOpenLevel,
 }: EducationTimelineProps) {
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const addedLevels = Object.entries(grouped).filter(([level, rows]) => {
+    const draft = draftByLevel[level];
+    const uploadedDocs = rows
+      .map((r) => uploadedMap[r.mapping_uuid])
+      .filter(Boolean);
+
+    const anyFieldFilled = draft
+      ? !isEmptyValue(draft.institution_name) ||
+        !isEmptyValue(draft.specialization) ||
+        !isEmptyValue(draft.year_of_passing) ||
+        !isEmptyValue(draft.percentage_cgpa)
+      : false;
+
+    // A level is added if it has form data or uploaded documents
+    return draft || uploadedDocs.length > 0 || anyFieldFilled;
+  });
+
+  const availableLevels = Object.keys(grouped).filter(
+    (level) => !addedLevels.find(([l]) => l === level)
+  );
+
   return (
-    <>
-      {Object.entries(grouped).map(([level, rows], index) => {
+    <div className="pb-16">
+      {addedLevels.map(([level, rows], arrayIndex) => {
         const draft = draftByLevel[level];
         const uploadedDocs = rows
           .map((r) => uploadedMap[r.mapping_uuid])
@@ -29,7 +66,11 @@ export default function EducationTimeline({
           ? !isEmptyValue(draft.institution_name) &&
             !isEmptyValue(draft.specialization) &&
             !isEmptyValue(draft.year_of_passing) &&
-            !isEmptyValue(draft.percentage_cgpa)
+            !isEmptyValue(draft.percentage_cgpa) &&
+            !isEmptyValue(draft.degree_uuid) &&
+            !isEmptyValue(draft.institute_location) &&
+            !isEmptyValue(draft.education_mode) &&
+            !isEmptyValue(draft.start_year)
           : false;
 
         // ✅ Check if all required documents are uploaded to backend
@@ -54,11 +95,15 @@ export default function EducationTimeline({
 
         const inProgress = (anyFieldFilled || anyDocsUploaded) && !completed;
 
+        // Find the index of this level in the original grouped sequence
+        const originalKeys = Object.keys(grouped);
+        const originalIndex = originalKeys.indexOf(level);
+        
         const prevRows: MappingRow[] =
-          index === 0 ? [] : (grouped[Object.keys(grouped)[index - 1]] ?? []);
+          originalIndex === 0 ? [] : (grouped[originalKeys[originalIndex - 1]] ?? []);
 
         const isUnlocked =
-          index === 0 ||
+          originalIndex === 0 ||
           prevRows.every((row) => uploadedMap[row.mapping_uuid]);
 
         return (
@@ -76,7 +121,8 @@ export default function EducationTimeline({
                         : "bg-gray-300"
                 }`}
               />
-              {index !== Object.keys(grouped).length - 1 && (
+              {/* Draw a line connecting nodes. If there's an add button below or it's not the last added item, draw the line. */}
+              {(arrayIndex !== addedLevels.length - 1 || availableLevels.length > 0) && (
                 <div
                   className={`w-0.5 flex-1 ${
                     completed ? "bg-green-500" : showExpandedDetails ? "bg-yellow-500" : "bg-gray-300"
@@ -86,7 +132,7 @@ export default function EducationTimeline({
             </div>
 
             {/* RIGHT CONTENT */}
-            <div className="flex-1">
+            <div className="flex-1 pb-4">
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="text-lg font-semibold capitalize">{level}</h3>
@@ -104,13 +150,13 @@ export default function EducationTimeline({
                 <button
                   disabled={!isUnlocked}
                   onClick={() => onOpenLevel(level)}
-                  className={`rounded-md px-4 py-1.5 text-sm text-white ${
+                  className={`rounded-md px-4 py-1.5 text-sm white text-white ${
                     isUnlocked
                       ? "bg-blue-600 hover:bg-blue-700"
                       : "bg-gray-400 cursor-not-allowed"
                   }`}
                 >
-                  {completed ? "Edit" : "+ Add Details"}
+                  {completed ? "Edit" : "Edit Details"}
                 </button>
               </div>
 
@@ -129,10 +175,40 @@ export default function EducationTimeline({
                     </div>
 
                     <div>
+                      <p className="text-gray-500">Degree</p>
+                      <p className="font-medium">
+                        {(() => {
+                          const uuid = draft?.degree_uuid || uploadedDocs[0]?.degree_uuid;
+                          if (!uuid) return "-";
+                          const degree = degrees.find((d) => d.degree_uuid === uuid);
+                          return degree ? degree.degree_name : uuid;
+                        })()}
+                      </p>
+                    </div>
+
+                    <div>
                       <p className="text-gray-500">Specialization</p>
                       <p className="font-medium">
                         {draft?.specialization ||
                           uploadedDocs[0]?.specialization ||
+                          "-"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-gray-500">Institute Location</p>
+                      <p className="font-medium">
+                        {draft?.institute_location ||
+                          uploadedDocs[0]?.institute_location ||
+                          "-"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-gray-500">Start Year</p>
+                      <p className="font-medium">
+                        {draft?.start_year ||
+                          uploadedDocs[0]?.start_year ||
                           "-"}
                       </p>
                     </div>
@@ -154,6 +230,24 @@ export default function EducationTimeline({
                           "-"}
                       </p>
                     </div>
+
+                    <div>
+                      <p className="text-gray-500">Education Mode</p>
+                      <p className="font-medium">
+                        {draft?.education_mode ||
+                          uploadedDocs[0]?.education_mode ||
+                          "-"}
+                      </p>
+                    </div>
+
+                    {(draft?.delay_reason || uploadedDocs[0]?.delay_reason) && (
+                      <div className="col-span-2">
+                        <p className="text-gray-500">Delay Reason</p>
+                        <p className="font-medium">
+                          {draft?.delay_reason || uploadedDocs[0]?.delay_reason}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* DOCUMENTS */}
@@ -193,6 +287,48 @@ export default function EducationTimeline({
           </div>
         );
       })}
-    </>
+
+      {/* Add Education Dropdown Flow */}
+      {availableLevels.length > 0 && (
+        <div className="flex gap-6 relative">
+          {/* Vertical alignment placeholder to match the timeline dots above */}
+          <div className="flex flex-col items-center">
+            <div className="h-4 w-4 rounded-full bg-gray-300" />
+            <div className="w-0.5 flex-1 bg-gray-300" />
+          </div>
+          <div className="flex-1 pb-4">
+            <div className="relative inline-block text-left" ref={dropdownRef}>
+              <button
+                type="button"
+                onClick={() => setShowDropdown(!showDropdown)}
+                className="rounded-md px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm focus:outline-none"
+              >
+                + Add Education
+              </button>
+              
+              {showDropdown && (
+                <div className="absolute left-0 z-10 mt-2 w-56 origin-top-left rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                  <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
+                    {availableLevels.map((level) => (
+                      <button
+                        key={level}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 capitalize"
+                        role="menuitem"
+                        onClick={() => {
+                          setShowDropdown(false);
+                          onOpenLevel(level);
+                        }}
+                      >
+                        {level}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

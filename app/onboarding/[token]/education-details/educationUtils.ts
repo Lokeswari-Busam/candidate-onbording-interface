@@ -20,7 +20,12 @@ export const hasEducationChanged = (
     oldDoc.institution_name !== form.institution_name ||
     oldDoc.specialization !== form.specialization ||
     String(oldDoc.year_of_passing) !== form.year_of_passing ||
-    String(oldDoc.percentage_cgpa) !== form.percentage_cgpa
+    String(oldDoc.percentage_cgpa) !== form.percentage_cgpa ||
+    (oldDoc.degree_uuid || "") !== form.degree_uuid ||
+    (oldDoc.institute_location || "") !== form.institute_location ||
+    (oldDoc.education_mode || "") !== form.education_mode ||
+    String(oldDoc.start_year || "") !== form.start_year ||
+    (oldDoc.delay_reason || "") !== form.delay_reason
   );
 };
 
@@ -43,6 +48,11 @@ export const normalizeDraft = (draft: Education): Education => {
     specialization: normalizeToString(draft.specialization),
     year_of_passing: normalizeToString(draft.year_of_passing),
     percentage_cgpa: normalizeToString(draft.percentage_cgpa),
+    degree_uuid: normalizeToString(draft.degree_uuid),
+    institute_location: normalizeToString(draft.institute_location),
+    education_mode: normalizeToString(draft.education_mode),
+    start_year: normalizeToString(draft.start_year),
+    delay_reason: normalizeToString(draft.delay_reason),
     documents: Array.isArray(draft.documents) ? draft.documents : [],
   };
 };
@@ -75,6 +85,11 @@ export const buildBackendDraftByLevel = (
       specialization: normalizeToString(firstDoc?.specialization),
       year_of_passing: normalizeToString(firstDoc?.year_of_passing),
       percentage_cgpa: normalizeToString(firstDoc?.percentage_cgpa),
+      degree_uuid: normalizeToString(firstDoc?.degree_uuid),
+      institute_location: normalizeToString(firstDoc?.institute_location),
+      education_mode: normalizeToString(firstDoc?.education_mode),
+      start_year: normalizeToString(firstDoc?.start_year),
+      delay_reason: normalizeToString(firstDoc?.delay_reason),
       documents: docs,
     });
   });
