@@ -200,17 +200,19 @@ useEffect(() => {
 };
 
   const handleSameAsPermanent = (checked: boolean) => {
-  setSameAsPermanent(checked);
+    setSameAsPermanent(checked);
 
-  if (checked) {
-    setDraft((prev) => ({
-      permanent: prev.permanent ?? emptyPermanentAddress,
-      current: { ...prev.current ?? emptyTemporaryAddress,
-        address_type: "current",
-      },
-    }));
-  }
-};
+    setDraft((prev) => {
+      if (checked) {
+        return {
+          permanent: prev.permanent,
+          current: { ...prev.permanent, address_type: "current" },
+        };
+      }
+
+      return prev;
+    });
+  };
 
 const handleContinue = async () => {
   if (isSubmittingRef.current) return;
@@ -313,74 +315,74 @@ const handleContinue = async () => {
     // };
 
     const saveAddress = async (
-  current: AddressForm,
-  original: AddressForm | null,
-  address_uuid: string | null,
-  setUuid: (id: string) => void
-) => {
-  const payload = {
-    user_uuid: userUuid,
-    address_type: current.address_type,
-    address_line1: current.address_line1,
-    address_line2: current.address_line2,
-    city: current.city,
-    district_or_ward: current.district_or_ward,
-    state_or_region: current.state_or_region,
-    country_uuid: current.country_uuid,
-    postal_code: current.postal_code,
-  };
+    current: AddressForm,
+    original: AddressForm | null,
+    address_uuid: string | null,
+    setUuid: (id: string) => void
+  ) => {
+    const payload = {
+      user_uuid: userUuid,
+      address_type: current.address_type,
+      address_line1: current.address_line1,
+      address_line2: current.address_line2,
+      city: current.city,
+      district_or_ward: current.district_or_ward,
+      state_or_region: current.state_or_region,
+      country_uuid: current.country_uuid,
+      postal_code: current.postal_code,
+    };
 
-  // 🟡 skip if no change
-  if (address_uuid && original && isEqual(original, current)) return;
+    // 🟡 skip if no change
+    if (address_uuid && original && isEqual(original, current)) return;
 
-  // 🔵 UPDATE
-  if (address_uuid) {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/address/${address_uuid}`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+    // 🔵 UPDATE
+    if (address_uuid) {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/address/${address_uuid}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      if (res.status === 409) {
+        const err = await res.json();
+        toast.error(err.detail);
+        return;
       }
-    );
 
-    if (res.status === 409) {
-      const err = await res.json();
-      toast.error(err.detail);
-      return;
+      if (!res.ok) throw new Error();
+
+      toast.success(`${current.address_type} address updated`);
     }
 
-    if (!res.ok) throw new Error();
+    // 🟢 CREATE
+    else {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/address`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
 
-    toast.success(`${current.address_type} address updated`);
-  }
+      if (!res.ok) throw new Error();
 
-  // 🟢 CREATE
-  else {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/address`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      const data = await res.json();
+      const newUuid = data.address_uuid;
+
+      setUuid(newUuid);
+
+      if (current.address_type === "permanent") {
+        localStorage.setItem(`address-uuid-permanent-${token}`, newUuid);
+      } else {
+        localStorage.setItem(`address-uuid-temporary-${token}`, newUuid);
       }
-    );
 
-    if (!res.ok) throw new Error();
-
-    const data = await res.json();
-    const newUuid = data.address_uuid;
-
-    setUuid(newUuid);
-
-    if (current.address_type === "permanent") {
-      localStorage.setItem(`address-uuid-permanent-${token}`, newUuid);
-    } else {
-      localStorage.setItem(`address-uuid-temporary-${token}`, newUuid);
+      toast.success(`${current.address_type} address saved`);
     }
-
-    toast.success(`${current.address_type} address saved`);
-  }
 };
 
     const permanentChanged =
@@ -394,7 +396,8 @@ const handleContinue = async () => {
     if (
       originalDraft &&
       !permanentChanged &&
-      (sameAsPermanent || !temporaryChanged)
+      !temporaryChanged &&
+      !sameAsPermanent
     ) {
       toast("No changes detected. Moving to next step.");
       router.push(`/onboarding/${token}/identity-documents`);
@@ -414,11 +417,20 @@ const handleContinue = async () => {
       );
     }
 
-    if (!sameAsPermanent && (temporaryChanged || !temporaryUuid)) {
+    if (sameAsPermanent) {
+      tasks.push(
+        saveAddress(
+          {...permanent, address_type: "current" },
+          originalDraft?.current|| null,
+          temporaryUuid,
+          setTemporaryUuid
+        )
+      );
+    }else if (temporaryChanged || !temporaryUuid) {
       tasks.push(
         saveAddress(
           current,
-          originalDraft?.current|| null,
+          originalDraft?.current || null,
           temporaryUuid,
           setTemporaryUuid
         )
@@ -428,10 +440,6 @@ const handleContinue = async () => {
     await Promise.all(tasks);
 
     // Mirror permanent UUID into temporary when Same-as-Permanent
-if (sameAsPermanent && permanentUuid) {
-  setTemporaryUuid(permanentUuid);
-  localStorage.setItem(`address-uuid-temporary-${token}`, permanentUuid);
-}
   const snapshot: AddressDraft = {
   permanent: { ...permanent },
   current: sameAsPermanent
