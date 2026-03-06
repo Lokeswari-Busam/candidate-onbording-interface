@@ -23,7 +23,8 @@ interface ExperienceDetails {
   end_date: string;
   employment_type: string;
   is_current: number;
-  remarks: string; // ✅ REQUIRED
+  notice_period_days?: number;
+  // remarks: string; // ✅ REQUIRED
   documents: ExperienceDocument[];
 }
 
@@ -37,6 +38,26 @@ const EMPLOYMENT_DOCUMENT_RULES: Record<string, string[]> = {
   Freelance: ["exp_certificate_path"],
 };
 
+function calculateDuration(start: string, end: string) {
+  if (!start || !end) return "";
+
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+
+  const months =
+    (endDate.getFullYear() - startDate.getFullYear()) * 12 +
+    (endDate.getMonth() - startDate.getMonth());
+
+  const years = Math.floor(months / 12);
+  const remainingMonths = months % 12;
+
+  if (years > 0) {
+    return `${years} year(s) ${remainingMonths} month(s)`;
+  }
+
+  return `${remainingMonths} month(s)`;
+}
+
 /* ===================== PAGE ===================== */
 
 export default function ExperienceDetailsPage() {
@@ -46,6 +67,11 @@ export default function ExperienceDetailsPage() {
   const { setLoading: setGlobalLoading } = useGlobalLoading();
 
   const [mounted, setMounted] = useState(false);
+  const [hasExperience, setHasExperience] = useLocalStorageForm<boolean>(
+    `has-experience-${token}`,
+    false
+  );
+  
 function sanitizeDocuments(
   docs: unknown[]
 ): ExperienceDocument[] {
@@ -76,11 +102,15 @@ useEffect(() => {
     setMounted(true);
   }, []);
 
-  
-
   const [experienceList, setExperienceList] = useLocalStorageForm<
     ExperienceDetails[]
   >(`experience-details-${token}`, []);
+
+    useEffect(() => {
+      if (hasExperience && experienceList.length === 0) {
+        addExperience();
+      }
+    }, [hasExperience, experienceList]);
 
   const [originalList, setOriginalList] = useState<ExperienceDetails[] | null>(
     null,
@@ -104,8 +134,8 @@ useEffect(() => {
       oldExp.start_date !== newExp.start_date ||
       oldExp.end_date !== newExp.end_date ||
       oldExp.employment_type !== newExp.employment_type ||
-      oldExp.is_current !== newExp.is_current ||
-      oldExp.remarks !== newExp.remarks
+      oldExp.is_current !== newExp.is_current 
+      // oldExp.remarks !== newExp.remarks
     );
   };
 
@@ -117,7 +147,8 @@ useEffect(() => {
       end_date: "",
       employment_type: "",
       is_current: 0,
-      remarks: "",
+      notice_period_days: undefined,
+      // remarks: "",
       documents: [],
     };
 
@@ -139,13 +170,19 @@ useEffect(() => {
     const docs = updated[index].documents.filter(
       (d) => d.doc_type !== doc_type,
     );
-    docs.push({ doc_type, file, file_path: typeof file.name === "string" ? file.name : undefined });
+    //docs.push({ doc_type, file, file_path: typeof file.name === "string" ? file.name : undefined });
     docs.push({ doc_type, file, file_path: file.name, });
     updated[index].documents = docs;
     setExperienceList(updated);
   };
 
   const handleSaveAndContinue = async () => {
+
+    if (!hasExperience) {
+      toast.success("Saved successfully");
+      router.push(`/onboarding/${token}/preview-page`);
+      return;
+    }
     setLoading(true);
     setGlobalLoading(true);
 
@@ -230,7 +267,10 @@ useEffect(() => {
           form.append("start_date", exp.start_date);
           if (exp.end_date) form.append("end_date", exp.end_date);
           form.append("is_current", String(exp.is_current));
-          form.append("remarks", exp.remarks);
+         // form.append("remarks", exp.remarks);
+          if (exp.notice_period_days) {
+            form.append("notice_period_days", String(exp.notice_period_days));
+          }
 
           exp.documents.forEach((d) => {
             form.append("doc_types", d.doc_type);
@@ -297,7 +337,11 @@ useEffect(() => {
             form.append("start_date", exp.start_date);
             if (exp.end_date) form.append("end_date", exp.end_date);
             form.append("is_current", String(exp.is_current));
-            form.append("remarks", exp.remarks);
+          //  form.append("remarks", exp.remarks);
+
+            if (exp.notice_period_days) {
+              form.append("notice_period_days", String(exp.notice_period_days));
+            }
 
             // Add new documents
             for (const doc of exp.documents) {
@@ -352,11 +396,41 @@ useEffect(() => {
   return (
     <div style={pageWrapper}>
       <div style={cardStyle}>
-        <h2>Work Experience Details</h2>
+        <h2 style={{ marginBottom: 10}}>Work Experience Details</h2>
+          <div style={{ marginBottom: 25 }}>
+            <label style={{ fontWeight: 500 }}>
+              Do you have prior work experience?
+            </label>
 
-        {experienceList.map((exp, index) => {
-          const requiredDocs =
-            EMPLOYMENT_DOCUMENT_RULES[exp.employment_type] || [];
+            <div style={{ marginTop: 10 }}>
+              <label style={{ marginRight: 25, cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  checked={hasExperience === true}
+                  onChange={() => setHasExperience(true)}
+                />{" "}
+                Yes
+              </label>
+
+              <label style={{ cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  checked={hasExperience === false}
+                  onChange={() => setHasExperience(false)}
+                />{" "}
+                No
+              </label>
+            </div>
+          </div>
+
+        {hasExperience && (
+          <div style={{ borderTop: "1px solid #e5e7eb", margin: "25px 0" }} />
+        )}
+
+        {hasExperience &&
+          experienceList.map((exp, index) => {
+            const requiredDocs =
+              EMPLOYMENT_DOCUMENT_RULES[exp.employment_type] || [];
 
           return (
             <div key={index} style={expCard}>
@@ -403,6 +477,11 @@ useEffect(() => {
                   }
                   style={inputStyle}
                 />
+                {exp.start_date && exp.end_date && (
+                  <div style={{ marginBottom: 16, fontSize: 14, color: "#374151" }}>
+                    Duration: {calculateDuration(exp.start_date, exp.end_date)}
+                  </div>
+                )}
               </Field>
 
               <Field label="Employment Type *">
@@ -414,7 +493,8 @@ useEffect(() => {
                   style={inputStyle}
                 >
                   <option value="">Select</option>
-                  {Object.keys(EMPLOYMENT_DOCUMENT_RULES).map((t) => (
+                  {Object.keys(EMPLOYMENT_DOCUMENT_RULES)
+                    .map((t) => (
                     <option key={t}>{t}</option>
                   ))}
                 </select>
@@ -435,7 +515,26 @@ useEffect(() => {
                 Current Job
               </div>
 
-              <Field label="Remarks">
+              {exp.is_current === 1 && (
+                <Field label="Notice Period (Days)">
+                  <input
+                    type="number"
+                    min={0}
+                    max={120}
+                    value={exp.notice_period_days || ""}
+                    onChange={(e) =>
+                      updateExperience(
+                        index,
+                        "notice_period_days",
+                        Number(e.target.value)
+                      )
+                    }
+                    style={inputStyle}
+                  />
+                </Field>
+              )}
+
+              {/* <Field label="Remarks">
                 <textarea
                   rows={3}
                   value={exp.remarks}
@@ -444,7 +543,7 @@ useEffect(() => {
                   }
                   style={inputStyle}
                 />
-              </Field>
+              </Field> */}
 
               {requiredDocs.map((doc) => (
                 <Field key={doc} label={doc.replace(/_/g, " ").toUpperCase()}>
@@ -484,9 +583,11 @@ useEffect(() => {
           );
         })}
 
-        <button onClick={addExperience} style={addBtn}>
-          + Add Experience
-        </button>
+        {hasExperience && (
+          <button onClick={addExperience} style={addBtn}>
+            + Add Experience
+          </button>
+        )}
 
         <div style={{ textAlign: "right", marginTop: 24 }}>
           <button
