@@ -52,9 +52,13 @@ interface Relation {
 interface Education {
   education_name: string;
   institution_name?: string;
+  institute_location?: string;
+  education_mode?: string;
+  start_year?: number | string;
   specialization?: string;
   year_of_passing?: number | string;
   percentage_cgpa?: number | string;
+  delay_reason?: string;
   documents?: {
     document_name: string;
     file_path?: string;
@@ -712,8 +716,28 @@ function Section({
             value={edu.specialization}
           />
           <PreviewRow
+            label="Institute Location"
+            value={edu. institute_location}
+          />
+          <PreviewRow
+            label="Education Mode"
+            value={edu.education_mode}
+          />
+          <PreviewRow
+            label="Start Year"
+            value={edu.start_year}
+          />
+          <PreviewRow
             label="Year of Passing"
             value={edu.year_of_passing}
+          />
+          <PreviewRow
+            label="Percentage / CGPA"
+            value={edu.percentage_cgpa}
+          />
+          <PreviewRow
+            label="Delay Reason"
+            value={edu.delay_reason}
           />
 
           {edu.documents?.map((doc, docIdx) => (

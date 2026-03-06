@@ -1,10 +1,11 @@
 "use client";
 
-import type { CommonForm, MappingRow, UploadedDoc } from "./types";
+import type { CommonForm, DegreeMaster, MappingRow, UploadedDoc } from "./types";
 
 type EducationModalProps = {
   activeLevel: string | null;
   form: CommonForm;
+  degrees: DegreeMaster[];
   activeRows: MappingRow[];
   files: Record<string, File | null>;
   uploadedMap: Record<string, UploadedDoc>;
@@ -19,6 +20,7 @@ type EducationModalProps = {
 export default function EducationModal({
   activeLevel,
   form,
+  degrees,
   activeRows,
   files,
   uploadedMap,
@@ -36,33 +38,83 @@ export default function EducationModal({
       <div className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
         <h3 className="mb-6 text-lg font-semibold">{activeLevel} – Details</h3>
 
-        <div className="mb-6 space-y-3">
-          <input
-            className="w-full rounded-md border px-3 py-2 text-sm"
-            placeholder="Institute Name"
-            value={form.institution_name}
-            onChange={(e) => onFormChange({ institution_name: e.target.value })}
-          />
-          <input
-            className="w-full rounded-md border px-3 py-2 text-sm"
-            placeholder="Specialization"
-            value={form.specialization}
-            onChange={(e) => onFormChange({ specialization: e.target.value })}
-          />
-          <input
-            type="number"
-            className="w-full rounded-md border px-3 py-2 text-sm"
-            placeholder="Year of Passing"
-            value={form.year_of_passing}
-            onChange={(e) => onFormChange({ year_of_passing: e.target.value })}
-          />
-          <input
-            type="number"
-            className="w-full rounded-md border px-3 py-2 text-sm"
-            placeholder="Percentage / CGPA"
-            value={form.percentage_cgpa}
-            onChange={(e) => onFormChange({ percentage_cgpa: e.target.value })}
-          />
+        <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* First Column */}
+          <div className="space-y-3">
+            <select
+              className="w-full rounded-md border px-3 py-2 text-sm"
+              value={form.degree_uuid}
+              onChange={(e) => onFormChange({ degree_uuid: e.target.value })}
+            >
+              <option value="">Select Degree</option>
+              {degrees.map((d) => (
+                <option key={d.degree_uuid} value={d.degree_uuid}>
+                  {d.degree_name}
+                </option>
+              ))}
+            </select>
+            <input
+              className="w-full rounded-md border px-3 py-2 text-sm"
+              placeholder="Institute Name"
+              value={form.institution_name}
+              onChange={(e) => onFormChange({ institution_name: e.target.value })}
+            />
+            <input
+              type="number"
+              className="w-full rounded-md border px-3 py-2 text-sm"
+              placeholder="Start Year"
+              value={form.start_year}
+              onChange={(e) => onFormChange({ start_year: e.target.value })}
+            />
+            <input
+              type="number"
+              className="w-full rounded-md border px-3 py-2 text-sm"
+              placeholder="Year of Passing"
+              value={form.year_of_passing}
+              onChange={(e) => onFormChange({ year_of_passing: e.target.value })}
+            />
+            <input
+              className="w-full rounded-md border px-3 py-2 text-sm"
+              placeholder="Delay Reason (if any)"
+              value={form.delay_reason}
+              onChange={(e) => onFormChange({ delay_reason: e.target.value })}
+            />
+          </div>
+
+          {/* Second Column */}
+          <div className="space-y-3">
+            <input
+              className="w-full rounded-md border px-3 py-2 text-sm"
+              placeholder="Specialization"
+              value={form.specialization}
+              onChange={(e) => onFormChange({ specialization: e.target.value })}
+            />
+            <input
+              className="w-full rounded-md border px-3 py-2 text-sm"
+              placeholder="Institute Location"
+              value={form.institute_location}
+              onChange={(e) => onFormChange({ institute_location: e.target.value })}
+            />
+            <select
+              className="w-full rounded-md border px-3 py-2 text-sm"
+              value={form.education_mode}
+              onChange={(e) => onFormChange({ education_mode: e.target.value })}
+            >
+              <option value="">Select Education Mode</option>
+              <option value="Regular">Regular</option>
+              <option value="Distance">Distance</option>
+              <option value="Part Time">Part time</option>
+              <option value="Online">Online</option>
+              
+            </select>
+            <input
+              type="number"
+              className="w-full rounded-md border px-3 py-2 text-sm"
+              placeholder="Percentage / CGPA"
+              value={form.percentage_cgpa}
+              onChange={(e) => onFormChange({ percentage_cgpa: e.target.value })}
+            />
+          </div>
         </div>
 
         <div className="space-y-4">

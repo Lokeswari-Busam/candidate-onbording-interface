@@ -1,6 +1,7 @@
 export const EDUCATION_HIERARCHY = [
   "SSC",
   "INTERMEDIATE",
+  "BACHELORS",
   "UNDER GRADUATE",
   "POST GRADUATE",
 ];

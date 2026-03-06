@@ -59,7 +59,7 @@ export default function EducationDetailsPage() {
     }
   }, [token]);
 
-  const { rows, uploadedMap: backendUploadedMap, setUploadedMap: setBackendUploadedMap, userUuid } = useEducationData({
+  const { rows, uploadedMap: backendUploadedMap, setUploadedMap: setBackendUploadedMap, userUuid, degrees } = useEducationData({
     base,
     token,
     countryUuid: countryUuid || "",
@@ -132,6 +132,11 @@ export default function EducationDetailsPage() {
     specialization: "",
     year_of_passing: "",
     percentage_cgpa: "",
+    degree_uuid: "",
+    institute_location: "",
+    education_mode: "",
+    start_year: "",
+    delay_reason: "",
   });
 
   const [files, setFiles] = useState<Record<string, File | null>>({});
@@ -144,6 +149,11 @@ export default function EducationDetailsPage() {
       specialization: "",
       year_of_passing: "",
       percentage_cgpa: "",
+      degree_uuid: "",
+      institute_location: "",
+      education_mode: "",
+      start_year: "",
+      delay_reason: "",
     });
     setFiles({});
     setError("");
@@ -200,6 +210,11 @@ export default function EducationDetailsPage() {
       specialization: draft?.specialization || "",
       year_of_passing: draft?.year_of_passing || "",
       percentage_cgpa: draft?.percentage_cgpa || "",
+      degree_uuid: draft?.degree_uuid || "",
+      institute_location: draft?.institute_location || "",
+      education_mode: draft?.education_mode || "",
+      start_year: draft?.start_year || "",
+      delay_reason: draft?.delay_reason || "",
     });
     setFiles({});
     setError("");
@@ -217,7 +232,11 @@ export default function EducationDetailsPage() {
       isEmptyValue(form.institution_name) ||
       isEmptyValue(form.specialization) ||
       isEmptyValue(form.year_of_passing) ||
-      isEmptyValue(form.percentage_cgpa)
+      isEmptyValue(form.percentage_cgpa) ||
+      isEmptyValue(form.degree_uuid) ||
+      isEmptyValue(form.institute_location) ||
+      isEmptyValue(form.education_mode) ||
+      isEmptyValue(form.start_year)
     ) {
       setError("Please fill all common fields");
       return;
@@ -282,6 +301,13 @@ export default function EducationDetailsPage() {
         payload.append("specialization", form.specialization);
         payload.append("year_of_passing", form.year_of_passing);
         payload.append("percentage_cgpa", form.percentage_cgpa);
+        payload.append("degree_uuid", form.degree_uuid);
+        payload.append("institute_location", form.institute_location);
+        payload.append("education_mode", form.education_mode);
+        payload.append("start_year", form.start_year);
+        if (form.delay_reason && form.delay_reason.trim() !== "") {
+          payload.append("delay_reason", form.delay_reason);
+        }
         if (file) payload.append("file", file);
 
         /* ========== 1️⃣ CREATE ========== */
@@ -332,6 +358,11 @@ export default function EducationDetailsPage() {
           specialization: form.specialization,
           year_of_passing: form.year_of_passing,
           percentage_cgpa: form.percentage_cgpa,
+          degree_uuid: form.degree_uuid,
+          institute_location: form.institute_location,
+          education_mode: form.education_mode,
+          start_year: form.start_year,
+          delay_reason: form.delay_reason,
           documents: activeRows.map((row) => {
             const doc = nextUploadedMap[row.mapping_uuid];
             return {
@@ -364,12 +395,22 @@ export default function EducationDetailsPage() {
           grouped={grouped}
           uploadedMap={uploadedMap}
           draftByLevel={draftByLevel}
+          degrees={degrees}
           onOpenLevel={openLevel}
         />
 
         <EducationModal
           activeLevel={activeLevel}
           form={form}
+          degrees={
+            activeLevel
+              ? degrees.filter(
+                  (d) =>
+                    !d.education_name ||
+                    d.education_name.toLowerCase() === activeLevel.toLowerCase()
+                )
+              : []
+          }
           activeRows={activeRows}
           files={files}
           uploadedMap={uploadedMap}
