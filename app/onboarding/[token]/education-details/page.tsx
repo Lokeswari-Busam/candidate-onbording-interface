@@ -110,7 +110,7 @@ export default function EducationDetailsPage() {
       const merged = { ...uploadedMap, ...backendUploadedMap };
       setUploadedMapState(merged);
     }
-  }, [backendUploadedMap]);
+  }, [backendUploadedMap, uploadedMap]);
 
   const setUploadedMap = (value: Record<string, UploadedDoc> | ((prev: Record<string, UploadedDoc>) => Record<string, UploadedDoc>)) => {
     setUploadedMapState((prev) => {

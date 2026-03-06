@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import type { CommonForm, DegreeMaster, MappingRow, UploadedDoc } from "./types";
+import { EDUCATION_DURATION } from "./constants";
 
 type EducationModalProps = {
   activeLevel: string | null;
@@ -31,6 +33,27 @@ export default function EducationModal({
   onCancel,
   onSave,
 }: EducationModalProps) {
+  // Calculate if delay reason should be shown
+  const normalizedLevel = activeLevel?.trim().toUpperCase() || "";
+  // Try to find matching duration, handling spaces
+  let expectedDuration = EDUCATION_DURATION[normalizedLevel];
+  if (expectedDuration === undefined) {
+    // Try without spaces
+    const levelWithoutSpaces = normalizedLevel.replace(/\s+/g, "");
+    expectedDuration = EDUCATION_DURATION[levelWithoutSpaces] || 0;
+  }
+  const startYear = form.start_year ? parseInt(form.start_year) : 0;
+  const endYear = form.year_of_passing ? parseInt(form.year_of_passing) : 0;
+  const actualDuration = startYear && endYear ? endYear - startYear : 0;
+  const shouldShowDelayReason = actualDuration > expectedDuration;
+
+  // Clear delay reason if not needed
+  useEffect(() => {
+    if (!shouldShowDelayReason && form.delay_reason) {
+      onFormChange({ delay_reason: "" });
+    }
+  }, [shouldShowDelayReason, form.delay_reason, onFormChange]);
+
   if (!activeLevel) return null;
 
   return (
@@ -73,12 +96,14 @@ export default function EducationModal({
               value={form.year_of_passing}
               onChange={(e) => onFormChange({ year_of_passing: e.target.value })}
             />
-            <input
-              className="w-full rounded-md border px-3 py-2 text-sm"
-              placeholder="Delay Reason (if any)"
-              value={form.delay_reason}
-              onChange={(e) => onFormChange({ delay_reason: e.target.value })}
-            />
+            {shouldShowDelayReason && (
+              <input
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                placeholder="Delay Reason"
+                value={form.delay_reason}
+                onChange={(e) => onFormChange({ delay_reason: e.target.value })}
+              />
+            )}
           </div>
 
           {/* Second Column */}

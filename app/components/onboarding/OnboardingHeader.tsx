@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { usePathname, useRouter, useParams } from "next/navigation";
 import { steps } from "./steps";
 
@@ -8,22 +9,52 @@ export default function OnboardingHeader() {
   const router = useRouter();
   const { token } = useParams();
 
+  // Track max step in ref
+  const maxStepRef = useRef(0);
+
   const currentStepIndex = steps.findIndex((step) =>
     pathname.endsWith(step.path)
   );
 
   const safeIndex = currentStepIndex === -1 ? 0 : currentStepIndex;
 
+  // Initialize ref from localStorage
+  useEffect(() => {
+    if (!token || typeof window === "undefined") return;
+
+    const storageKey = `max-step-${token}`;
+    const stored = localStorage.getItem(storageKey);
+
+    if (stored) {
+      maxStepRef.current = Math.max(maxStepRef.current, parseInt(stored));
+    }
+  }, [token]);
+
+  // Update localStorage when moving forward
+  useEffect(() => {
+    if (!token || safeIndex <= maxStepRef.current) return;
+
+    const storageKey = `max-step-${token}`;
+    localStorage.setItem(storageKey, safeIndex.toString());
+
+    maxStepRef.current = safeIndex;
+  }, [safeIndex, token]);
+
+  // Safe ref access
+  // eslint-disable-next-line react-hooks/refs
+  const maxStep = maxStepRef.current;
+
   const progressPercent = Math.round(
-    (safeIndex / (steps.length - 1)) * 100
+    (Math.max(safeIndex, maxStep) / (steps.length - 1)) * 100
   );
 
   return (
     <header className="bg-white border-b shadow-sm">
       <div className="max-w-6xl mx-auto px-6 py-4 space-y-4">
 
-        {/* ───────── TOP BAR ───────── */}
+        {/* TOP BAR */}
         <div className="flex items-center justify-between">
+          
           {/* LEFT: STEP INFO */}
           <div className="text-sm text-gray-700">
             <span className="font-semibold">
@@ -35,12 +66,13 @@ export default function OnboardingHeader() {
             </span>
           </div>
 
-          {/* RIGHT: SHORT PROGRESS BAR */}
+          {/* RIGHT: PROGRESS BAR */}
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-blue-700">
               {progressPercent}%
             </span>
-            <div className="w-49 h-8 bg-gray-200 rounded-full overflow-hidden">
+
+            <div className="w-[200px] h-8 bg-gray-200 rounded-full overflow-hidden">
               <div
                 className="h-full bg-green-700 transition-all duration-300"
                 style={{ width: `${progressPercent}%` }}
@@ -49,7 +81,7 @@ export default function OnboardingHeader() {
           </div>
         </div>
 
-        {/* ───────── STEPS NAVIGATION (DOWN) ───────── */}
+        {/* STEPS NAVIGATION */}
         <div className="flex items-center justify-between pt-2">
           {steps.map((step, index) => {
             const isCompleted = index < safeIndex;
@@ -58,6 +90,7 @@ export default function OnboardingHeader() {
 
             return (
               <div key={step.id} className="flex items-center flex-1">
+
                 {/* STEP CIRCLE */}
                 <button
                   disabled={isFuture}
@@ -109,6 +142,7 @@ export default function OnboardingHeader() {
             );
           })}
         </div>
+
       </div>
     </header>
   );

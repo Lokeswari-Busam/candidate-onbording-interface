@@ -95,16 +95,8 @@ export default function EducationTimeline({
 
         const inProgress = (anyFieldFilled || anyDocsUploaded) && !completed;
 
-        // Find the index of this level in the original grouped sequence
-        const originalKeys = Object.keys(grouped);
-        const originalIndex = originalKeys.indexOf(level);
-        
-        const prevRows: MappingRow[] =
-          originalIndex === 0 ? [] : (grouped[originalKeys[originalIndex - 1]] ?? []);
-
-        const isUnlocked =
-          originalIndex === 0 ||
-          prevRows.every((row) => uploadedMap[row.mapping_uuid]);
+        // Allow editing for all levels
+        const isUnlocked = true;
 
         return (
           <div key={level} className="flex gap-6 mb-8">
