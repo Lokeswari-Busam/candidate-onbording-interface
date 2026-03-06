@@ -22,7 +22,7 @@ interface ExperienceDetails {
   start_date: string;
   end_date: string;
   employment_type: string;
-  is_current: number;
+  is_current: boolean;
   notice_period_days?: number;
   // remarks: string; // ✅ REQUIRED
   documents: ExperienceDocument[];
@@ -146,7 +146,7 @@ useEffect(() => {
       start_date: "",
       end_date: "",
       employment_type: "",
-      is_current: 0,
+      is_current: false,
       notice_period_days: undefined,
       // remarks: "",
       documents: [],
@@ -158,7 +158,7 @@ useEffect(() => {
   const updateExperience = (
     index: number,
     field: keyof ExperienceDetails,
-    value: string | number | ExperienceDocument[],
+    value: string | number| boolean | ExperienceDocument[],
   ) => {
     const updated = [...experienceList];
     updated[index] = { ...updated[index], [field]: value };
@@ -470,7 +470,7 @@ useEffect(() => {
               <Field label="End Date">
                 <input
                   type="date"
-                  disabled={exp.is_current === 1}
+                  disabled={exp.is_current}
                   value={exp.end_date}
                   onChange={(e) =>
                     updateExperience(index, "end_date", e.target.value)
@@ -503,19 +503,19 @@ useEffect(() => {
               <div style={{ marginBottom: 16 }}>
                 <input
                   type="checkbox"
-                  checked={exp.is_current === 1}
+                  checked={exp.is_current}
                   onChange={(e) =>
                     updateExperience(
                       index,
                       "is_current",
-                      e.target.checked ? 1 : 0,
+                      e.target.checked
                     )
                   }
                 />{" "}
                 Current Job
               </div>
 
-              {exp.is_current === 1 && (
+              {exp.is_current && (
                 <Field label="Notice Period (Days)">
                   <input
                     type="number"
