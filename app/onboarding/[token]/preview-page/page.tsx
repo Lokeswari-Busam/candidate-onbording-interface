@@ -81,7 +81,8 @@ interface Experience {
   role_title?: string;
   employment_type?: string;
   is_current?: boolean;
-  remarks?: string;
+  notice_period_days?: number;
+  // remarks?: string;
   documents?: ExperienceDocument[];
 }
 
@@ -101,6 +102,14 @@ interface IdentityDocument {
 }
 
 /* ===================== COMPONENT ===================== */
+
+const DOCUMENT_LABELS: Record<string, string> = {
+  exp_certificate_path: "Experience Certificate",
+  payslip_path: "Payslip",
+  internship_certificate_path: "Internship Certificate",
+  contract_aggrement_path: "Contract Agreement",
+};
+
 
 export default function OnboardingPreviewPage() {
   const { token } = useParams<{ token: string }>();
@@ -551,7 +560,7 @@ function Section({
   /* ===================== UI ===================== */
 
   return (
-  <div className="max-w-5xl mx-auto p-6 space-y-6 bg-gray-50 min--screen">
+  <div className="max-w-5xl mx-auto p-6 space-y-6 bg-gray-50 min-h-screen">
     {/* HEADER */}
     <h1 className="text-2xl font-semibold">Preview & Submit Onboarding</h1>
 
@@ -775,15 +784,30 @@ function Section({
           <PreviewRow label="Company Name" value={exp.company_name} />
           <PreviewRow label="Role / Designation" value={exp.role_title} />
           <PreviewRow label="Start Date" value={exp.start_date} />
-          <PreviewRow label="End Date" value={exp.end_date} />
+          <PreviewRow label="End Date" value={exp.is_current ? "Present" : exp.end_date} />
           <PreviewRow
             label="Employment Type"
             value={exp.employment_type}
           />
-          <PreviewRow label="Remarks" value={exp.remarks} />
-
-        {exp.documents?.map((doc, docIdx) => {
-          const docName = doc.document_name || doc.doc_type;
+          
+        {exp.is_current === true && exp.notice_period_days && (
+          <PreviewRow
+            label="Notice Period (Days)"
+            value={exp.notice_period_days}
+          />
+        )}
+        {exp.documents
+        ?.filter(
+          (doc) =>
+            (doc.file_path || doc.file) &&
+            doc.doc_type !== "internship_certificate_path"
+        )
+        .map((doc, docIdx) => {
+          const docName =
+            doc.document_name ||
+            DOCUMENT_LABELS[doc.doc_type || ""] ||
+            doc.doc_type;
+            
           const fileName = doc.file_path
             ? getFileName(doc.file_path)
             : doc.file?.name || "No file uploaded";
