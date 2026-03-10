@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useLocalStorageForm } from "../hooks/localStorage";
 import toast from "react-hot-toast";
 import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
@@ -63,6 +63,7 @@ const emptyTemporaryAddress: AddressForm = {
 export default function AddressDetailsPage() {
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { setLoading: setGlobalLoading } = useGlobalLoading();
   const [countries, setCountries] = useState<Country[]>([]);
   const [sameAsPermanent, setSameAsPermanent] = useState(false);
@@ -334,7 +335,11 @@ export default function AddressDetailsPage() {
       setOriginalDraft(snapshot);
       localStorage.setItem(`address-snapshot-${token}`, JSON.stringify(snapshot));
       
-      router.push(`/onboarding/${token}/identity-documents`);
+      if (!!searchParams.get("edit")) {
+        router.push(`/onboarding/${token}/preview-page`);
+      } else {
+        router.push(`/onboarding/${token}/identity-documents`);
+      }
     } catch {
       toast.error("Failed to save address details");
       setError("Failed to save address details");
@@ -406,7 +411,13 @@ export default function AddressDetailsPage() {
           <div className="flex justify-end gap-4 pt-6 border-t border-indigo-100">
             <Button
               variant="secondary"
-              onClick={() => router.push(`/onboarding/${token}/personal-details`)}
+              onClick={() => {
+                if (!!searchParams.get("edit")) {
+                  router.push(`/onboarding/${token}/preview-page`);
+                } else {
+                  router.push(`/onboarding/${token}/personal-details`);
+                }
+              }}
             >
               Back
             </Button>

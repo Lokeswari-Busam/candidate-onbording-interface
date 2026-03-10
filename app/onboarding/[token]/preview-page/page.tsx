@@ -425,7 +425,7 @@ export default function OnboardingPreviewPage() {
           {/* PERSONAL DETAILS */}
           <Section
             title="Personal Information"
-            onEdit={() => router.push(`/onboarding/${token}/personal-details`)}
+            onEdit={() => router.push(`/onboarding/${token}/personal-details?edit=true`)}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-12">
               <PreviewRow label="Full Name" value={`${personalDetails?.first_name} ${personalDetails?.last_name}`} />
@@ -445,7 +445,7 @@ export default function OnboardingPreviewPage() {
           {/* ADDRESS DETAILS */}
           <Section
             title="Residential Address"
-            onEdit={() => router.push(`/onboarding/${token}/address-details`)}
+            onEdit={() => router.push(`/onboarding/${token}/address-details?edit=true`)}
           >
             {showCombined ? (
               <AddressBlock title="Permanent & Current Address" address={permanentAddress} />
@@ -464,7 +464,7 @@ export default function OnboardingPreviewPage() {
           {/* IDENTITY DOCUMENTS */}
           <Section
             title="Identity Verification"
-            onEdit={() => router.push(`/onboarding/${token}/identity-documents`)}
+            onEdit={() => router.push(`/onboarding/${token}/identity-documents?edit=true`)}
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {identityList.map((doc, idx) => (
@@ -489,7 +489,7 @@ export default function OnboardingPreviewPage() {
           {/* EDUCATION DETAILS */}
           <Section
             title="Educational Background"
-            onEdit={() => router.push(`/onboarding/${token}/education-details`)}
+            onEdit={() => router.push(`/onboarding/${token}/education-details?edit=true`)}
           >
             <div className="space-y-6">
               {educationList.map((edu, idx) => (
@@ -524,7 +524,7 @@ export default function OnboardingPreviewPage() {
           {experienceDetails.length > 0 && (
             <Section
               title="Work Experience"
-              onEdit={() => router.push(`/onboarding/${token}/experience-details`)}
+              onEdit={() => router.push(`/onboarding/${token}/experience-details?edit=true`)}
             >
               <div className="space-y-6">
                 {experienceDetails.map((exp, idx) => (

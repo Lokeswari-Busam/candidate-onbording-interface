@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "react-hot-toast";
 import { useLocalStorageForm } from "../hooks/localStorage";
 import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
@@ -26,6 +26,7 @@ import { ErrorAlert } from "@/app/components/onboarding/AlertsComponents";
 export default function EducationDetailsPage() {
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const base = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
@@ -400,7 +401,13 @@ export default function EducationDetailsPage() {
           <div className="mt-16 flex items-center justify-between pt-10 border-t border-indigo-50">
             <Button
               variant="secondary"
-              onClick={() => router.push(`/onboarding/${token}/identity-documents`)}
+              onClick={() => {
+                if (!!searchParams.get("edit")) {
+                  router.push(`/onboarding/${token}/preview-page`);
+                } else {
+                  router.push(`/onboarding/${token}/identity-documents`);
+                }
+              }}
               className="px-8 py-4 text-sm font-bold tracking-wide"
             >
               <span className="flex items-center gap-2">
@@ -412,7 +419,13 @@ export default function EducationDetailsPage() {
             </Button>
             <Button
               variant="primary"
-              onClick={() => router.push(`/onboarding/${token}/experience-details`)}
+              onClick={() => {
+                if (!!searchParams.get("edit")) {
+                  router.push(`/onboarding/${token}/preview-page`);
+                } else {
+                  router.push(`/onboarding/${token}/experience-details`);
+                }
+              }}
               className="px-10 py-4 text-sm font-bold shadow-indigo-200 shadow-lg tracking-wide group"
             >
               <span className="flex items-center gap-2">

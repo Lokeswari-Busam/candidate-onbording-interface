@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useLocalStorageForm } from "../hooks/localStorage";
 import toast from "react-hot-toast";
 import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
@@ -48,6 +48,7 @@ const isBrowserFile = (value: unknown): value is File =>
 export default function IdentityDocumentsPage() {
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { setLoading: setGlobalLoading } = useGlobalLoading();
 
   const [countries, setCountries] = useState<Country[]>([]);
@@ -273,7 +274,11 @@ export default function IdentityDocumentsPage() {
 
       if (!hasChanges()) {
         toast("No changes detected. Moving to next step.");
-        router.push(`/onboarding/${token}/education-details`);
+        if (!!searchParams.get("edit")) {
+          router.push(`/onboarding/${token}/preview-page`);
+        } else {
+          router.push(`/onboarding/${token}/education-details`);
+        }
         return;
       }
 
@@ -319,7 +324,11 @@ export default function IdentityDocumentsPage() {
       }
 
       toast.success("Identity documents saved successfully");
-      router.push(`/onboarding/${token}/education-details`);
+      if (!!searchParams.get("edit")) {
+        router.push(`/onboarding/${token}/preview-page`);
+      } else {
+        router.push(`/onboarding/${token}/education-details`);
+      }
     } catch {
       toast.error("Failed to save identity documents");
       setError("Failed to save identity documents");
@@ -451,7 +460,13 @@ export default function IdentityDocumentsPage() {
           <div className="flex justify-end gap-4 pt-6 border-t border-indigo-100">
             <Button
               variant="secondary"
-              onClick={() => router.push(`/onboarding/${token}/address-details`)}
+              onClick={() => {
+                if (!!searchParams.get("edit")) {
+                  router.push(`/onboarding/${token}/preview-page`);
+                } else {
+                  router.push(`/onboarding/${token}/address-details`);
+                }
+              }}
             >
               Back
             </Button>

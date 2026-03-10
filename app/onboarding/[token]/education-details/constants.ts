@@ -13,9 +13,10 @@ export const EDUCATION_DURATION: Record<string, number> = {
   "SECONDARY": 1,
   "SECONDARY SCHOOL": 1,
   "SECONDARYSCHOOL": 1,
-  
+
   // Intermediate (2 years)
   "INTERMEDIATE": 2,
+  "Intermediate": 2,
   "HIGHER SECONDARY": 2,
   "HIGHERSECONDARY": 2,
   "SENIOR SECONDARY": 2,
@@ -23,10 +24,13 @@ export const EDUCATION_DURATION: Record<string, number> = {
   "HSC": 2,
   "PLUS TWO": 2,
   "PLUSTWO": 2,
-  
+  "Higher Secondary Education": 2,
+  "HIGHER SECONDARY EDUCATION": 2,
+  "HIGHERSECONDARYEDUCATION": 2,
+
   // Diploma (3 years)
   "DIPLOMA": 3,
-  
+
   // Bachelors (4 years)
   "BACHELORS": 4,
   "UNDERGRADUATE": 4,
@@ -37,7 +41,7 @@ export const EDUCATION_DURATION: Record<string, number> = {
   "B.SC": 4,
   "B.COM": 4,
   "BTECH": 4,
-  
+
   // Postgraduate (2 years)
   "POSTGRADUATE": 2,
   "POST GRADUATE": 2,

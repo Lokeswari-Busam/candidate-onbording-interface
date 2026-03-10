@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ChangeEvent, useEffect, useState } from "react";
 import { useLocalStorageForm } from "../hooks/localStorage";
 import { toast } from "react-hot-toast";
@@ -51,6 +51,7 @@ function calculateDuration(start: string, end: string) {
 
 export default function ExperienceDetailsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { token } = useParams<{ token: string }>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -159,7 +160,11 @@ export default function ExperienceDetailsPage() {
 
     if (!hasExperience) {
       toast.success("Saved successfully");
-      router.push(`/onboarding/${token}/preview-page`);
+      if (!!searchParams.get("edit")) {
+        router.push(`/onboarding/${token}/preview-page`);
+      } else {
+        router.push(`/onboarding/${token}/preview-page`);
+      }
       return;
     }
 
@@ -220,7 +225,11 @@ export default function ExperienceDetailsPage() {
       }
 
       toast.success("Experience details saved successfully");
-      router.push(`/onboarding/${token}/preview-page`);
+      if (!!searchParams.get("edit")) {
+        router.push(`/onboarding/${token}/preview-page`);
+      } else {
+        router.push(`/onboarding/${token}/preview-page`);
+      }
     } catch (err) {
       toast.error("Failed to save experience details");
       setError("An error occurred while saving your experience details.");
@@ -461,7 +470,13 @@ export default function ExperienceDetailsPage() {
           <div className="flex justify-between items-center pt-8 border-t border-indigo-100">
             <Button
               variant="secondary"
-              onClick={() => router.push(`/onboarding/${token}/education-details`)}
+              onClick={() => {
+                if (!!searchParams.get("edit")) {
+                  router.push(`/onboarding/${token}/preview-page`);
+                } else {
+                  router.push(`/onboarding/${token}/identity-documents`);
+                }
+              }}
             >
               Back
             </Button>

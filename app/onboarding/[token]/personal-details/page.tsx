@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useLocalStorageForm } from "../hooks/localStorage";
 import toast from "react-hot-toast";
 import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
@@ -57,6 +57,7 @@ interface Relation {
 export default function PersonalDetailsPage() {
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { setLoading: setGlobalLoading } = useGlobalLoading();
 
   const [countries, setCountries] = useState<Country[]>([]);
@@ -297,9 +298,14 @@ console.log("personalUuid:", personalUuid);
         );
       };
       // no changes
+      const isEditMode = !!searchParams.get("edit");
       if (personalUuid && isSame(originalPersonal, payload)) {
         toast(" No changes detected");
-        router.push(`/onboarding/${token}/address-details`);
+        if (isEditMode) {
+          router.push(`/onboarding/${token}/preview-page`);
+        } else {
+          router.push(`/onboarding/${token}/address-details`);
+        }
         return;
       }
       // 🔵 FIRST TIME → POST
@@ -396,9 +402,11 @@ emergency_contact_relation_uuid: payload.emergency_contact_relation_uuid,
         toast.success("Personal details updated successfully");
       }
 
-      setTimeout(() => {
-  router.push(`/onboarding/${token}/address-details`);
-}, 200);
+      if (isEditMode) {
+        router.push(`/onboarding/${token}/preview-page`);
+      } else {
+        router.push(`/onboarding/${token}/address-details`);
+      }
     } catch {
       toast.error("Failed to save personal details");
       setError("Failed to save personal details");
