@@ -176,7 +176,96 @@ useEffect(() => {
     setExperienceList(updated);
   };
 
+  const validateExperience = () => {
+
+    const allowedTypes = ["pdf","png","jpg","jpeg"]
+    const maxSize = 5 * 1024 * 1024
+
+    for (let i = 0; i < experienceList.length; i++) {
+
+      const exp = experienceList[i]
+
+      if (!exp.company_name.trim()) {
+        toast.error(`Experience ${i+1}: Company name is required`)
+        return false
+      }
+
+      if (!exp.role_title.trim()) {
+        toast.error(`Experience ${i+1}: Role title is required`)
+        return false
+      }
+
+      if (!exp.start_date) {
+        toast.error(`Experience ${i+1}: Start date is required`)
+        return false
+      }
+
+      const startDate = new Date(exp.start_date)
+      const today = new Date()
+
+      if (startDate > today) {
+        toast.error(`Experience ${i+1}: Start date cannot be in future`)
+        return false
+      }
+
+      if (exp.end_date) {
+
+        const endDate = new Date(exp.end_date)
+
+        if (endDate < startDate) {
+          toast.error(`Experience ${i+1}: End date cannot be before start date`)
+          return false
+        }
+
+      }
+
+      if (exp.is_current && exp.end_date) {
+        toast.error(`Experience ${i+1}: Current job cannot have end date`)
+        return false
+      }
+
+      if (exp.is_current && !exp.notice_period_days) {
+        toast.error(`Experience ${i+1}: Notice period is required for current job`)
+        return false
+      }
+
+      if (exp.notice_period_days && exp.notice_period_days > 120) {
+        toast.error(`Experience ${i+1}: Notice period cannot exceed 120 days`)
+        return false
+      }
+
+      for (const doc of exp.documents) {
+
+        if (doc.file) {
+
+          const extension = doc.file.name.split(".").pop()?.toLowerCase()
+
+          if (!extension || !allowedTypes.includes(extension)) {
+            toast.error(`Experience ${i+1}: Invalid file type`)
+            return false
+          }
+
+          if (doc.file.size > maxSize) {
+            toast.error(`Experience ${i+1}: File size cannot exceed 5MB`)
+            return false
+          }
+
+        }
+
+      }
+
+    }
+
+    return true
+
+  }
+
+
   const handleSaveAndContinue = async () => {
+
+    if (!validateExperience()) {
+      return
+    }
 
     if (!hasExperience) {
       toast.success("Saved successfully");
@@ -265,7 +354,7 @@ useEffect(() => {
           form.append("role_title", exp.role_title);
           form.append("employment_type", exp.employment_type);
           form.append("start_date", exp.start_date);
-          if (exp.end_date) form.append("end_date", exp.end_date);
+          if (!exp.end_date) form.append("end_date", exp.end_date);
           form.append("is_current", String(exp.is_current));
          // form.append("remarks", exp.remarks);
           if (exp.notice_period_days) {
@@ -459,6 +548,7 @@ useEffect(() => {
               <Field label="Start Date *">
                 <input
                   type="date"
+                  max={new Date().toISOString().split("T")[0]}
                   value={exp.start_date}
                   onChange={(e) =>
                     updateExperience(index, "start_date", e.target.value)
@@ -552,6 +642,7 @@ useEffect(() => {
                       Choose File
                       <input
                         type="file"
+                        accept=".pdf,.png,.jpg,.jpeg"
                         hidden
                         onChange={(e: ChangeEvent<HTMLInputElement>) =>
                           e.target.files &&
