@@ -5,6 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import { useLocalStorageForm } from "../hooks/localStorage";
 import toast from "react-hot-toast";
 import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
+import { FormField, TextInput, SelectInput } from "@/app/components/onboarding/FormComponents";
+import { Button } from "@/app/components/onboarding/ButtonComponents";
+import { ErrorAlert } from "@/app/components/onboarding/AlertsComponents";
+import { validations, errorMessages } from "@/app/utils/validations";
 
 /* ===================== TYPES ===================== */
 
@@ -38,23 +42,9 @@ interface PersonalForm {
   nationality_country_uuid: string;
   residence_country_uuid: string;
   emergency_contact_name: string;
-emergency_contact_phone: string;
-emergency_contact_relation_uuid: string;
+  emergency_contact_phone: string;
+  emergency_contact_relation_uuid: string;
  
-}
-
-interface FieldProps {
-  label: string;
-  children: React.ReactNode;
-}
-
-interface ReadOnlyFieldProps {
-  label: string;
-  value: string;
-}
-
-interface RowProps {
-  children: React.ReactNode;
 }
 
 interface Relation {
@@ -78,6 +68,9 @@ export default function PersonalDetailsPage() {
   const [originalPersonal, setOriginalPersonal] = useState<PersonalForm | null>(
     null
   );
+
+  // Validation errors
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const hasLoadedRef = useRef(false);
   const isSubmittingRef = useRef(false);
@@ -176,15 +169,91 @@ useEffect(() => {
 
   /* ---------------- HANDLERS ---------------- */
 
+  /* ----------- VALIDATION ----------- */
+  const validateField = (fieldName: string, value: unknown): string => {
+    const valueStr = typeof value === "string" ? value : "";
+    
+    switch (fieldName) {
+      case "date_of_birth":
+        if (!valueStr) return errorMessages.REQUIRED;
+        if (!validations.isValidDate(valueStr)) return errorMessages.INVALID_DATE;
+        if (!validations.isValidDOB(valueStr)) return errorMessages.INVALID_DOB;
+        if (!validations.isValidAge(valueStr, 18)) return errorMessages.INVALID_AGE(18);
+        return "";
+
+      case "gender":
+      case "marital_status":
+      case "blood_group":
+      case "nationality_country_uuid":
+      case "residence_country_uuid":
+      case "emergency_contact_relation_uuid":
+        if (!valueStr) return errorMessages.REQUIRED;
+        return "";
+
+      case "emergency_contact_name":
+        if (!valueStr) return errorMessages.REQUIRED;
+        if (!validations.minLength(valueStr, 2)) return errorMessages.MIN_LENGTH(2);
+        if (!validations.maxLength(valueStr, 50)) return errorMessages.MAX_LENGTH(50);
+        return "";
+
+      case "emergency_contact_phone":
+        if (!valueStr) return errorMessages.REQUIRED;
+        if (!validations.isValidPhone(valueStr)) return errorMessages.INVALID_PHONE;
+        return "";
+
+      default:
+        return "";
+    }
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    Object.entries(formData).forEach(([key, value]) => {
+      const error = validateField(key, value);
+      if (error) newErrors[key] = error;
+    });
+
+    setFieldErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  /* ----------- HANDLE CHANGE ----------- */
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    
+    // Clear error for this field if user is typing
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }));
+    }
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.replace(/\D/g, "").slice(0, 10);
+    setFormData((prev) => ({ ...prev, emergency_contact_phone: val }));
+    if (fieldErrors.emergency_contact_phone) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        emergency_contact_phone: "",
+      }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate form first
+    if (!validateForm()) {
+      toast.error("Please fill all required fields correctly");
+      return;
+    }
 
     if (!offer) {
       toast.error("Offer details not loaded yet");
@@ -213,7 +282,7 @@ console.log("personalUuid:", personalUuid);
         emergency_contact_relation_uuid: formData.emergency_contact_relation_uuid,
       };
 
-      const isSame = (a: PersonalForm | null, b: any) => {
+      const isSame = (a: PersonalForm | null, b: Record<string, unknown>) => {
         if (!a) return false;
         return (
           (a.date_of_birth || "") === b.date_of_birth &&
@@ -340,241 +409,252 @@ emergency_contact_relation_uuid: payload.emergency_contact_relation_uuid,
     }
   };
 
-  function Field({ label, children }: FieldProps) {
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <label style={labelStyle}>{label}</label>
-      {children}
-    </div>
-  );
-}
-
-function ReadOnlyField({ label, value }: ReadOnlyFieldProps) {
-  return (
-    <div style={{ marginBottom: 16, flex: 1 }}>
-      <label style={labelStyle}>{label}</label>
-      <input
-        value={value}
-        disabled
-        style={{ ...inputStyle, backgroundColor: "#f3f4f6" }}
-      />
-    </div>
-  );
-}
-
-function Row({ children }: RowProps) {
-  return <div style={{ display: "flex", gap: 12 }}>{children}</div>;
-}
-
-
-  /* ===================== UI ===================== */
+    /* ===================== UI ===================== */
 
   return (
-    <div style={pageWrapper}>
-      <div style={cardStyle}>
-        <h2 style={titleStyle}>Personal Details</h2>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-white py-8">
+      {/* Background accent elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-200/30 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-200/30 rounded-full blur-3xl"></div>
+      </div>
 
-        {error && <p style={{ color: "red" }}>{error}</p>}
+      <div className="relative mx-auto max-w-5xl rounded-2xl bg-white/95 backdrop-blur-lg p-8 shadow-xl border border-indigo-100">
+        <h2 className="mb-6 text-3xl font-bold text-indigo-900">
+          Personal Details
+        </h2>
+
+        {error && <ErrorAlert message={error} onClose={() => setError("")} />}
 
         {offer && (
-          <>
-            <Row>
-              <ReadOnlyField label="First Name" value={offer.first_name} />
-              <ReadOnlyField label="Last Name" value={offer.last_name} />
-            </Row>
-
-            <ReadOnlyField label="Email" value={offer.mail} />
-
-            <Row>
-              <ReadOnlyField
-                label="Country Code"
-                value={`+${offer.country_code}`}
-              />
-              <ReadOnlyField
-                label="Contact Number"
-                value={offer.contact_number}
-              />
-            </Row>
-          </>
+          <div className="mb-6 rounded-xl bg-gradient-to-r from-indigo-50 to-blue-50 p-4 border border-indigo-200">
+            <h3 className="font-semibold text-indigo-900 mb-4">📋 Offer Information</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-sm text-indigo-700 font-medium">First Name</p>
+                <p className="font-semibold text-gray-900">{offer.first_name}</p>
+              </div>
+              <div>
+                <p className="text-sm text-indigo-700 font-medium">Last Name</p>
+                <p className="font-semibold text-gray-900">{offer.last_name}</p>
+              </div>
+              <div className="md:col-span-2">
+                <p className="text-sm text-indigo-700 font-medium">Email</p>
+                <p className="font-semibold text-gray-900 break-all">{offer.mail}</p>
+              </div>
+              <div>
+                <p className="text-sm text-indigo-700 font-medium">Country Code</p>
+                <p className="font-semibold text-gray-900">+{offer.country_code}</p>
+              </div>
+              <div>
+                <p className="text-sm text-indigo-700 font-medium">Contact Number</p>
+                <p className="font-semibold text-gray-900">{offer.contact_number}</p>
+              </div>
+            </div>
+          </div>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <Field label="Date of Birth">
-            <input
-              type="date"
-              name="date_of_birth"
-              value={formData?.date_of_birth || ""}
-              onChange={handleChange}
-              style={inputStyle}
-            />
-          </Field>
-
-          <Field label="Gender">
-            <select
-              name="gender"
-              value={formData?.gender || ""}
-              onChange={handleChange}
-              style={inputStyle}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Basic Information Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField
+              label="Date of Birth"
+              required
+              error={fieldErrors.date_of_birth}
             >
-              <option value="">Select</option>
-              <option>Male</option>
-              <option>Female</option>
-              <option>Other</option>
-            </select>
-          </Field>
+              <TextInput
+                type="date"
+                name="date_of_birth"
+                value={formData?.date_of_birth || ""}
+                onChange={handleChange}
+                error={fieldErrors.date_of_birth ? "true" : ""}
+              />
+            </FormField>
 
-          <Field label="Marital Status">
-            <select
-              name="marital_status"
-              value={formData?.marital_status || ""}
-              onChange={handleChange}
-              style={inputStyle}
+            <FormField label="Gender" required error={fieldErrors.gender}>
+              <SelectInput
+                name="gender"
+                value={formData?.gender || ""}
+                onChange={handleChange}
+                placeholder="Select Gender"
+                error={fieldErrors.gender ? "true" : ""}
+              >
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </SelectInput>
+            </FormField>
+
+            <FormField
+              label="Marital Status"
+              required
+              error={fieldErrors.marital_status}
             >
-              <option value="">Select</option>
-              <option>Single</option>
-              <option>Married</option>
-            </select>
-          </Field>
+              <SelectInput
+                name="marital_status"
+                value={formData?.marital_status || ""}
+                onChange={handleChange}
+                placeholder="Select Marital Status"
+                error={fieldErrors.marital_status ? "true" : ""}
+              >
+                <option value="Single">Single</option>
+                <option value="Married">Married</option>
+              </SelectInput>
+            </FormField>
 
-          <Field label="Blood Group">
-            <select
-              name="blood_group"
-              value={formData?.blood_group || ""}
-              onChange={handleChange}
-              style={inputStyle}
+            <FormField
+              label="Blood Group"
+              required
+              error={fieldErrors.blood_group}
             >
-              <option value="">Select</option>
-              <option>A+</option>
-              <option>A-</option>
-              <option>B+</option>
-              <option>B-</option>
-              <option>AB+</option>
-              <option>AB-</option>
-              <option>O+</option>
-              <option>O-</option>
-            </select>
-          </Field>
+              <SelectInput
+                name="blood_group"
+                value={formData?.blood_group || ""}
+                onChange={handleChange}
+                placeholder="Select Blood Group"
+                error={fieldErrors.blood_group ? "true" : ""}
+              >
+                <option value="A+">A+</option>
+                <option value="A-">A-</option>
+                <option value="B+">B+</option>
+                <option value="B-">B-</option>
+                <option value="AB+">AB+</option>
+                <option value="AB-">AB-</option>
+                <option value="O+">O+</option>
+                <option value="O-">O-</option>
+              </SelectInput>
+            </FormField>
 
-          <Field label="Nationality">
-            <select
-              name="nationality_country_uuid"
-              value={formData?.nationality_country_uuid || ""}
-              onChange={handleChange}
-              style={inputStyle}
+            <FormField
+              label="Nationality"
+              required
+              error={fieldErrors.nationality_country_uuid}
             >
-              <option value="">Select Country</option>
-              {countries.map((c) => (
-                <option key={c.country_uuid} value={c.country_uuid}>
-                  {c.country_name}
-                </option>
-              ))}
-            </select>
-          </Field>
+              <SelectInput
+                name="nationality_country_uuid"
+                value={formData?.nationality_country_uuid || ""}
+                onChange={handleChange}
+                placeholder="Select Country"
+                error={fieldErrors.nationality_country_uuid ? "true" : ""}
+              >
+                {countries.map((c) => (
+                  <option key={c.country_uuid} value={c.country_uuid}>
+                    {c.country_name}
+                  </option>
+                ))}
+              </SelectInput>
+            </FormField>
 
-          <Field label="Residence Country">
-            <select
-              name="residence_country_uuid"
-              value={formData?.residence_country_uuid || ""}
-              onChange={handleChange}
-              style={inputStyle}
+            <FormField
+              label="Residence Country"
+              required
+              error={fieldErrors.residence_country_uuid}
             >
-              <option value="">Select Country</option>
-              {countries.map((c) => (
-                <option key={c.country_uuid} value={c.country_uuid}>
-                  {c.country_name}
-                </option>
-              ))}
-            </select>
-          </Field>
+              <SelectInput
+                name="residence_country_uuid"
+                value={formData?.residence_country_uuid || ""}
+                onChange={handleChange}
+                placeholder="Select Country"
+                error={fieldErrors.residence_country_uuid ? "true" : ""}
+              >
+                {countries.map((c) => (
+                  <option key={c.country_uuid} value={c.country_uuid}>
+                    {c.country_name}
+                  </option>
+                ))}
+              </SelectInput>
+            </FormField>
+          </div>
 
-           <Field label="Emergency Contact Name">
-  <input
-    name="emergency_contact_name"
-    value={formData?.emergency_contact_name || ""}
-    onChange={handleChange}
-    style={inputStyle}
-    placeholder="Enter name"
-  />
-</Field>
+          {/* Emergency Contact Section */}
+          <div className="border-t border-indigo-200 pt-4 mt-4">
+            <h3 className="mb-4 text-lg font-semibold text-indigo-900">
+              🆘 Emergency Contact
+            </h3>
 
-<Field label="Emergency Contact Phone">
-  <input
-    name="emergency_contact_phone"
-    value={formData?.emergency_contact_phone || ""}
-    onChange={(e) => {
-      const val = e.target.value.replace(/\D/g, "");
-      setFormData((prev) => ({ ...prev, emergency_contact_phone: val }));
-    }}
-    style={inputStyle}
-    maxLength={10}
-    placeholder="Enter phone number"
-  />
-</Field>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                label="Emergency Contact Name"
+                required
+                error={fieldErrors.emergency_contact_name}
+              >
+                <TextInput
+                  name="emergency_contact_name"
+                  value={formData?.emergency_contact_name || ""}
+                  onChange={handleChange}
+                  placeholder="Enter full name"
+                  error={fieldErrors.emergency_contact_name ? "true" : ""}
+                />
+              </FormField>
 
-<Field label="Emergency Contact Relation">
-  <select
-    name="emergency_contact_relation_uuid"
-    value={formData?.emergency_contact_relation_uuid || ""}
-    onChange={handleChange}
-    style={inputStyle}
-  >
-    <option value="">Select Relation</option>
-    {relations.map((r) => (
-      <option key={r.relation_uuid} value={r.relation_uuid}>
-        {r.relation_name}
-      </option>
-    ))}
-  </select>
-</Field>
-            <div style={{ textAlign: "right", marginTop: 24 }}>
-          <button disabled={isSubmittingRef.current} style={submitBtn} type="submit">{isSubmittingRef.current ? "Saving..." : "Save & Continue"} </button>
+              <FormField
+                label="Emergency Contact Phone"
+                required
+                error={fieldErrors.emergency_contact_phone}
+              >
+                <TextInput
+                  name="emergency_contact_phone"
+                  type="tel"
+                  value={formData?.emergency_contact_phone || ""}
+                  onChange={handlePhoneChange}
+                  placeholder="Enter 10-digit phone number"
+                  maxLength={10}
+                  error={fieldErrors.emergency_contact_phone ? "true" : ""}
+                />
+              </FormField>
+
+              <FormField
+                label="Emergency Contact Relation"
+                required
+                error={fieldErrors.emergency_contact_relation_uuid}
+                className="md:col-span-2"
+              >
+                <SelectInput
+                  name="emergency_contact_relation_uuid"
+                  value={formData?.emergency_contact_relation_uuid || ""}
+                  onChange={handleChange}
+                  placeholder="Select Relation"
+                  error={fieldErrors.emergency_contact_relation_uuid ? "true" : ""}
+                >
+                  {relations.map((r) => (
+                    <option key={r.relation_uuid} value={r.relation_uuid}>
+                      {r.relation_name}
+                    </option>
+                  ))}
+                </SelectInput>
+              </FormField>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-4 pt-4 border-t border-indigo-200">
+            <Button
+              variant="secondary"
+              onClick={() => setFormData({
+                date_of_birth: "",
+                gender: "",
+                marital_status: "",
+                blood_group: "",
+                nationality_country_uuid: "",
+                residence_country_uuid: "",
+                emergency_contact_name: "",
+                emergency_contact_phone: "",
+                emergency_contact_relation_uuid: "",
+              })}
+            >
+              Clear Form
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              loading={loading}
+              disabled={loading}
+            >
+              {loading ? "Saving..." : "Save & Continue"}
+            </Button>
           </div>
         </form>
       </div>
     </div>
   );
 }
-
-/* ===================== STYLES (UNCHANGED) ===================== */
-
-const pageWrapper = {
-  backgroundColor: "#f5f7fb",
-  padding: "32px 0",
-};
-
-const cardStyle = {
-  maxWidth: 600,
-  margin: "0 auto",
-  backgroundColor: "#fff",
-  padding: 24,
-  borderRadius: 8,
-};
-
-const titleStyle = {
-  fontSize: 20,
-  fontWeight: 600,
-  marginBottom: 24,
-};
-
-const labelStyle = {
-  fontSize: 13,
-  fontWeight: 500,
-  marginBottom: 6,
-  display: "block",
-};
-
-const inputStyle = {
-  width: "100%",
-  height: 40,
-  borderRadius: 6,
-  border: "1px solid #d1d5db",
-  padding: "0 12px",
-};
-
-const submitBtn = {
-  backgroundColor: "#2563eb",
-  color: "#fff",
-  padding: "10px 20px",
-  borderRadius: 6,
-  border: "none",
-};

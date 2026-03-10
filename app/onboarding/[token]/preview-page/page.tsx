@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { useLocalStorageForm } from "../hooks/localStorage";
 import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
+import { Button } from "@/app/components/onboarding/ButtonComponents";
 
 /* ===================== TYPES ===================== */
 
@@ -43,11 +44,9 @@ interface Country {
 }
 
 interface Relation {
-    relation_uuid: string;
-    relation_name: string;
+  relation_uuid: string;
+  relation_name: string;
 }
-
-
 
 interface Education {
   education_name: string;
@@ -80,9 +79,8 @@ interface Experience {
   end_date?: string | null;
   role_title?: string;
   employment_type?: string;
-  is_current?: number;
+  is_current?: boolean | number;
   notice_period_days?: number;
-  // remarks?: string;
   documents?: ExperienceDocument[];
 }
 
@@ -91,13 +89,12 @@ interface IdentityDraft {
   documents: IdentityDocument[];
 }
 
-
 interface IdentityDocument {
   mapping_uuid: string;
   identity_type_uuid: string;
-  identity_type_name: string;   // ✅ document name
+  identity_type_name: string;
   identity_file_number: string;
-  file?: File;                   // ✅ uploaded file object
+  file?: File;
   file_path?: string;
 }
 
@@ -110,34 +107,18 @@ const DOCUMENT_LABELS: Record<string, string> = {
   contract_aggrement_path: "Contract Agreement",
 };
 
-
 export default function OnboardingPreviewPage() {
   const { token } = useParams<{ token: string }>();
   const router = useRouter();
 
   const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
-  const {setLoading: setGlobalLoading } = useGlobalLoading();
+  const { setLoading: setGlobalLoading } = useGlobalLoading();
   const [countries, setCountries] = useState<Country[]>([]);
   const [relations, setRelations] = useState<Relation[]>([]);
-
   const [mounted, setMounted] = useState(false);
 
   const isSubmittedRef = React.useRef(false);
-
-
-  const getAddressDisplayName = (type?: string) => {
-  if (!type) return "Address";
-
-  switch (type.toLowerCase()) {
-    case "permanent":
-          return "Permanent Address";
-        case "temporary":
-          return "Temporary Address";
-        default:
-          return "Temporary Address";
-      }
-    };
 
   useEffect(() => {
     setMounted(true);
@@ -147,57 +128,47 @@ export default function OnboardingPreviewPage() {
     fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/masters/country`)
       .then((res) => res.json())
       .then((data: Country[]) =>
-        setCountries((Array.isArray(data) ? data : []).filter((c) => c.is_active)),
+        setCountries((Array.isArray(data) ? data : []).filter((c) => c.is_active))
       )
-      .catch(() => {
-        // ignore country lookup errors
-      });
+      .catch(() => {});
   }, []);
+
   useEffect(() => {
-  fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/relations`)
-    .then((res) => res.json())
-    .then((data: Relation[]) => setRelations(data))
-    .catch(() => {});
-}, []);
+    fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/relations`)
+      .then((res) => res.json())
+      .then((data: Relation[]) => setRelations(data))
+      .catch(() => {});
+  }, []);
 
-  /* ===================== LOCAL STORAGE (TOKEN SCOPED) ===================== */
+  /* ===================== LOCAL STORAGE ===================== */
 
-  const [personalDetails, , clearPersonal] =
-    useLocalStorageForm<PersonalDetails | null>(
-      `personal-details-${token}`,
-      null
-    );
+  const [personalDetails, , clearPersonal] = useLocalStorageForm<PersonalDetails | null>(
+    `personal-details-${token}`,
+    null
+  );
 
-  const [addressData, , clearAddress] =
-    useLocalStorageForm<Record<string, Address>>(
-      `address-details-${token}`,
-      {}
-    );
+  const [addressData, , clearAddress] = useLocalStorageForm<Record<string, Address>>(
+    `address-details-${token}`,
+    {}
+  );
 
+  const [educationDetails, setEducationDetails, clearEducation] = useLocalStorageForm<Education[]>(
+    `education-details-${token}`,
+    []
+  );
 
-  const [educationDetails, setEducationDetails, clearEducation] =
-    useLocalStorageForm<Education[]>(
-      `education-details-${token}`,
-      []
-    );
+  const [experienceDetails, setExperienceDetails, clearExperience] = useLocalStorageForm<Experience[]>(
+    `experience-details-${token}`,
+    []
+  );
 
-  const [experienceDetails, setExperienceDetails, clearExperience] =
-    useLocalStorageForm<Experience[]>(
-      `experience-details-${token}`,
-      []
-    );
-
-  const [identityDraft, setIdentityDraft, clearIdentity] =
-  useLocalStorageForm<IdentityDraft>(
+  const [identityDraft, setIdentityDraft, clearIdentity] = useLocalStorageForm<IdentityDraft>(
     `identity-details-${token}`,
     {
       country_uuid: "",
       documents: [],
     }
   );
-
-  
-
 
   const user_uuid = personalDetails?.user_uuid;
 
@@ -211,7 +182,7 @@ export default function OnboardingPreviewPage() {
       if (isSubmittedRef.current) return;
       if (educationDetails.length === 0) return;
       const hasMissing = educationDetails.some((edu) =>
-        edu.documents?.some((doc) => !doc.file_path),
+        edu.documents?.some((doc) => !doc.file_path)
       );
       if (!hasMissing) return;
 
@@ -232,18 +203,14 @@ export default function OnboardingPreviewPage() {
 
         const mapByUuid = new Map(
           mappings.map(
-            (m: {
-              mapping_uuid: string;
-              document_name: string;
-              education_name: string;
-            }) => [
+            (m: { mapping_uuid: string; document_name: string; education_name: string }) => [
               m.mapping_uuid,
               {
                 document_name: m.document_name,
                 education_name: m.education_name,
               },
-            ],
-          ),
+            ]
+          )
         );
 
         const uploadByEduAndDoc = new Map<string, string>();
@@ -267,18 +234,15 @@ export default function OnboardingPreviewPage() {
                 const file_path = uploadByEduAndDoc.get(key);
                 return file_path ? { ...doc, file_path } : doc;
               }),
-            })),
+            }))
           );
         }
-      } catch {
-        // ignore backfill errors
-      }
+      } catch {}
     };
-
 
     const backfillExperience = async () => {
       const hasMissing = experienceDetails.some((exp) =>
-        exp.documents?.some((doc) => !doc.file_path),
+        exp.documents?.some((doc) => !doc.file_path)
       );
       if (!hasMissing) return;
       if (!user_uuid) return;
@@ -302,9 +266,7 @@ export default function OnboardingPreviewPage() {
             const data = await res.json();
             uploads = Array.isArray(data) ? data : [];
             if (uploads.length > 0) break;
-          } catch {
-            // try next endpoint
-          }
+          } catch {}
         }
 
         if (uploads.length === 0) return;
@@ -313,8 +275,7 @@ export default function OnboardingPreviewPage() {
           setExperienceDetails((prev) =>
             prev.map((exp) => {
               const match = uploads.find(
-                (u) =>
-                  u.experience_uuid && u.experience_uuid === exp.experience_uuid,
+                (u) => u.experience_uuid && u.experience_uuid === exp.experience_uuid
               );
               if (!match?.documents) return exp;
               return {
@@ -322,23 +283,18 @@ export default function OnboardingPreviewPage() {
                 documents: (exp.documents || []).map((doc) => {
                   if (doc.file_path) return doc;
                   const found = match.documents?.find(
-                    (d) => d.doc_type && d.doc_type === doc.doc_type,
+                    (d) => d.doc_type && d.doc_type === doc.doc_type
                   );
-                  return found?.file_path
-                    ? { ...doc, file_path: found.file_path }
-                    : doc;
+                  return found?.file_path ? { ...doc, file_path: found.file_path } : doc;
                 }),
               };
-            }),
+            })
           );
         }
-      } catch {
-        // ignore backfill errors
-      }
+      } catch {}
     };
 
     void backfillEducation();
-    // Identity backfill skipped: Swagger shows no GET endpoint for identity docs.
     void backfillExperience();
 
     return () => {
@@ -356,19 +312,12 @@ export default function OnboardingPreviewPage() {
     setIdentityDraft,
   ]);
 
-  /* ===================== TRANSFORM ADDRESSES ===================== */
+  /* ===================== HELPERS ===================== */
 
-  const addresses = useMemo<Address[]>(() => {
-    return Object.values(addressData);
-  }, [addressData]);
+  const addresses = useMemo<Address[]>(() => Object.values(addressData), [addressData]);
 
- const permanentAddress = addresses.find(
-    (a) => a.address_type === "permanent"
-  );
-
-  const temporaryAddress = addresses.find(
-    (a) => a.address_type === "current"
-  );
+  const permanentAddress = addresses.find((a) => a.address_type === "permanent");
+  const temporaryAddress = addresses.find((a) => a.address_type === "current");
 
   const hasAddressData = (addr?: Address) =>
     !!(
@@ -380,40 +329,24 @@ export default function OnboardingPreviewPage() {
       addr?.postal_code?.trim()
     );
 
-  // If temporary has no data → treat as same
-  const isTemporaryEmpty = !hasAddressData(temporaryAddress);
-
-  // Check if values are same
   const areAddressesSame =
     permanentAddress &&
     temporaryAddress &&
     permanentAddress.address_line1 === temporaryAddress.address_line1 &&
-    permanentAddress.address_line2 === temporaryAddress.address_line2 &&
     permanentAddress.city === temporaryAddress.city &&
-    permanentAddress.district_or_ward === temporaryAddress.district_or_ward &&
-    permanentAddress.state_or_region === temporaryAddress.state_or_region &&
     permanentAddress.postal_code === temporaryAddress.postal_code;
 
-  // FINAL condition
-  const showCombined =
-    permanentAddress &&
-    (isTemporaryEmpty || areAddressesSame);
+  const showCombined = permanentAddress && (!hasAddressData(temporaryAddress) || areAddressesSame);
 
- const identityList = useMemo<IdentityDocument[]>(() => {
-  return Array.isArray(identityDraft?.documents)
-    ? identityDraft.documents
-    : [];
-}, [identityDraft]);
+  const identityList = useMemo<IdentityDocument[]>(
+    () => (Array.isArray(identityDraft?.documents) ? identityDraft.documents : []),
+    [identityDraft]
+  );
 
-
-
-const educationList = useMemo<Education[]>(() => {
-  return Array.isArray(educationDetails) ? educationDetails : [];
-}, [educationDetails]);
-
-
-
-  /* ===================== VALIDATION ===================== */
+  const educationList = useMemo<Education[]>(
+    () => (Array.isArray(educationDetails) ? educationDetails : []),
+    [educationDetails]
+  );
 
   const isDataComplete = useMemo(() => {
     return Boolean(
@@ -421,28 +354,17 @@ const educationList = useMemo<Education[]>(() => {
         personalDetails &&
         addresses.length > 0 &&
         educationList.length > 0 &&
-        experienceDetails.length > 0 &&
         identityList.length > 0
     );
-  }, [
-    user_uuid,
-    personalDetails,
-    addresses,
-    educationList,
-    experienceDetails,
-    identityList,
-  ]);
+  }, [user_uuid, personalDetails, addresses, educationList, identityList]);
 
   const isSubmitDisabled = !confirmed || !isDataComplete || loading;
-
-  /* ===================== SUBMIT ===================== */
 
   const handleSubmit = async () => {
     if (!confirmed) {
       toast.error("Please confirm the details before submitting");
       return;
     }
-
     if (!isDataComplete || !personalDetails) {
       toast.error("Please complete all onboarding sections");
       return;
@@ -452,24 +374,16 @@ const educationList = useMemo<Education[]>(() => {
       setLoading(true);
       setGlobalLoading(true);
 
-      const payload = {
-        user_uuid
-      };
-
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/hr/candidate/submit`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
+      const payload = { user_uuid };
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/hr/candidate/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
       if (!res.ok) throw new Error();
 
       isSubmittedRef.current = true;
-
-      /* ✅ CLEAR DRAFT ONLY AFTER SUCCESS */
       clearPersonal();
       clearAddress();
       clearEducation();
@@ -486,385 +400,270 @@ const educationList = useMemo<Education[]>(() => {
     }
   };
 
-   if (!mounted) {
-    return null;
-  }
-  function PreviewRow({
-  label,
-  value,
-}: {
-  label: string;
-  value?: string | number | null;
-}) {
-  const display =
-    value && String(value).trim() !== "" ? String(value) : "-";
+  if (!mounted) return null;
+
   return (
-    <div className="grid grid-cols-3 gap-2 text-sm">
-      <span className="font-medium">{label}</span>
-      <span className="col-span-2 text-gray-700">
-        {display}
-      </span>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-white py-8 px-4">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-200/30 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-200/30 rounded-full blur-3xl"></div>
+      </div>
+
+      <div className="relative mx-auto max-w-5xl rounded-2xl bg-white/95 backdrop-blur-lg p-8 shadow-xl border border-indigo-100">
+        <div className="mb-10 text-center">
+          <h1 className="text-4xl font-extrabold text-indigo-900 mb-2">Review Your Onboarding</h1>
+          <p className="text-indigo-600 font-medium">Please verify all information before final submission</p>
+          {!isDataComplete && (
+            <p className="mt-4 text-red-500 font-medium flex items-center justify-center gap-2">
+              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+              Some sections are incomplete
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-12">
+          {/* PERSONAL DETAILS */}
+          <Section
+            title="Personal Information"
+            onEdit={() => router.push(`/onboarding/${token}/personal-details`)}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-12">
+              <PreviewRow label="Full Name" value={`${personalDetails?.first_name} ${personalDetails?.last_name}`} />
+              <PreviewRow label="Email Address" value={personalDetails?.email} />
+              <PreviewRow label="Contact Number" value={personalDetails?.contact_number} />
+              <PreviewRow label="Date of Birth" value={personalDetails?.date_of_birth} />
+              <PreviewRow label="Gender" value={personalDetails?.gender} />
+              <PreviewRow label="Marital Status" value={personalDetails?.marital_status} />
+              <PreviewRow label="Blood Group" value={personalDetails?.blood_group} />
+              <PreviewRow label="Nationality" value={getCountryName(countries, personalDetails?.nationality_country_uuid)} />
+              <PreviewRow label="Residence" value={getCountryName(countries, personalDetails?.residence_country_uuid)} />
+              <PreviewRow label="Emergency Contact" value={`${personalDetails?.emergency_contact_name} (${getRelationName(relations, personalDetails?.emergency_contact_relation_uuid)})`} />
+              <PreviewRow label="Emergency Phone" value={personalDetails?.emergency_contact_phone} />
+            </div>
+          </Section>
+
+          {/* ADDRESS DETAILS */}
+          <Section
+            title="Residential Address"
+            onEdit={() => router.push(`/onboarding/${token}/address-details`)}
+          >
+            {showCombined ? (
+              <AddressBlock title="Permanent & Current Address" address={permanentAddress} />
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {permanentAddress && hasAddressData(permanentAddress) && (
+                  <AddressBlock title="Permanent Address" address={permanentAddress} />
+                )}
+                {temporaryAddress && hasAddressData(temporaryAddress) && (
+                  <AddressBlock title="Current Address" address={temporaryAddress} />
+                )}
+              </div>
+            )}
+          </Section>
+
+          {/* IDENTITY DOCUMENTS */}
+          <Section
+            title="Identity Verification"
+            onEdit={() => router.push(`/onboarding/${token}/identity-documents`)}
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {identityList.map((doc, idx) => (
+                <div key={idx} className="p-4 rounded-xl bg-indigo-50/50 border border-indigo-100 flex items-start gap-4">
+                  <div className="bg-white p-3 rounded-lg shadow-sm">
+                    <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-indigo-900 text-sm mb-1">{doc.identity_type_name}</h4>
+                    <p className="text-sm text-indigo-600 font-medium mb-2">{doc.identity_file_number}</p>
+                    <span className="text-xs px-2 py-1 bg-white text-indigo-500 rounded-md border border-indigo-100 shadow-sm">
+                      {doc.file_path ? doc.file_path.split("/").pop() : doc.file?.name}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          {/* EDUCATION DETAILS */}
+          <Section
+            title="Educational Background"
+            onEdit={() => router.push(`/onboarding/${token}/education-details`)}
+          >
+            <div className="space-y-6">
+              {educationList.map((edu, idx) => (
+                <div key={idx} className="p-5 rounded-xl border border-indigo-100 bg-white shadow-sm">
+                  <h3 className="text-lg font-bold text-indigo-900 mb-4 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-indigo-500 rounded-full"></span>
+                    {edu.education_name}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-3">
+                    <PreviewRow label="Institution" value={edu.institution_name} />
+                    <PreviewRow label="Specialization" value={edu.specialization} />
+                    <PreviewRow label="Location" value={edu.institute_location} />
+                    <PreviewRow label="Mode" value={edu.education_mode} />
+                    <PreviewRow label="Duration" value={`${edu.start_year} - ${edu.year_of_passing}`} />
+                    <PreviewRow label="Result" value={`${edu.percentage_cgpa}% / CGPA`} />
+                  </div>
+                  {edu.documents && edu.documents.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-indigo-50 flex gap-3 flex-wrap">
+                      {edu.documents.map((d, i) => (
+                        <span key={i} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-full font-medium">
+                          📄 {d.document_name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          {/* EXPERIENCE DETAILS */}
+          {experienceDetails.length > 0 && (
+            <Section
+              title="Work Experience"
+              onEdit={() => router.push(`/onboarding/${token}/experience-details`)}
+            >
+              <div className="space-y-6">
+                {experienceDetails.map((exp, idx) => (
+                  <div key={idx} className="p-5 rounded-xl border border-indigo-100 bg-white shadow-sm">
+                    <div className="flex justify-between items-start mb-4">
+                      <h3 className="text-lg font-bold text-indigo-900">{exp.company_name}</h3>
+                      <span className={`text-xs px-3 py-1 rounded-full font-bold ${exp.is_current ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+                        {exp.is_current ? "Current Employer" : "Previous Employer"}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-3">
+                      <PreviewRow label="Role" value={exp.role_title} />
+                      <PreviewRow label="Type" value={exp.employment_type} />
+                      <PreviewRow label="Duration" value={`${exp.start_date} to ${exp.is_current ? "Present" : exp.end_date}`} />
+                      {exp.is_current && <PreviewRow label="Notice Period" value={`${exp.notice_period_days} Days`} />}
+                    </div>
+                    {exp.documents && exp.documents.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-indigo-50 flex gap-3 flex-wrap">
+                        {exp.documents.map((d, i) => (
+                          <span key={i} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-full font-medium">
+                            📄 {DOCUMENT_LABELS[d.doc_type || ""] || d.doc_type}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {/* SUBMISSION ACTION */}
+          <div className="mt-12 space-y-8">
+            <div className={`p-6 rounded-2xl border-2 transition-all ${confirmed ? "border-indigo-500 bg-indigo-50 shadow-md" : "border-indigo-100 bg-white"}`}>
+              <label className="flex items-center gap-4 cursor-pointer">
+                <div className="relative flex items-center justify-center">
+                  <input
+                    type="checkbox"
+                    className="peer sr-only"
+                    checked={confirmed}
+                    onChange={(e) => setConfirmed(e.target.checked)}
+                  />
+                  <div className="w-8 h-8 md:w-6 md:h-6 border-2 border-indigo-300 rounded peer-checked:bg-indigo-600 peer-checked:border-indigo-600 transition-all flex items-center justify-center">
+                    <svg className={`w-4 h-4 text-white ${confirmed ? "scale-100" : "scale-0"} transition-transform`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <p className="text-indigo-900 font-bold">Declare Information Accuracy</p>
+                  <p className="text-sm text-indigo-600">I confirm that all details provided are true to the best of my knowledge.</p>
+                </div>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-between gap-6">
+              <p className="hidden md:block text-sm text-indigo-400 font-medium">
+                Step 6 of 6: Final Review
+              </p>
+              <div className="flex-1 md:flex-none flex gap-4">
+                <Button variant="secondary" onClick={() => router.back()} disabled={loading}>
+                  Go Back
+                </Button>
+                <Button
+                  variant="primary"
+                  className="flex-1 md:flex-none px-12"
+                  onClick={handleSubmit}
+                  disabled={isSubmitDisabled}
+                  loading={loading}
+                >
+                  Submit Onboarding 🚀
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function getFileName(path?: string) {
-  if (!path) return "No file uploaded";
-  return path.split("/").pop();
+/* ===================== SUB-COMPONENTS ===================== */
+
+function Section({ title, children, onEdit }: { title: string; children: React.ReactNode; onEdit: () => void }) {
+  return (
+    <div className="relative group">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold text-indigo-900 flex items-center gap-3">
+          <span className="w-1.5 h-8 bg-indigo-600 rounded-full group-hover:bg-indigo-400 transition-colors"></span>
+          {title}
+        </h2>
+        <button
+          onClick={onEdit}
+          className="px-4 py-1.5 text-sm font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-all"
+        >
+          Modify
+        </button>
+      </div>
+      <div className="pl-4 md:pl-5">{children}</div>
+    </div>
+  );
+}
+
+function PreviewRow({ label, value }: { label: string; value?: string | number | null }) {
+  const display = value && String(value).trim() !== "" && value !== "undefined undefined" ? String(value) : "-";
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">{label}</span>
+      <span className="text-indigo-900 font-medium text-lg leading-tight">{display}</span>
+    </div>
+  );
+}
+
+function AddressBlock({ title, address }: { title: string; address?: Address }) {
+  return (
+    <div className="p-4 rounded-xl bg-indigo-50/50 border border-indigo-100">
+      <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-3">{title}</h4>
+      <div className="text-indigo-900 font-medium leading-relaxed">
+        <p className="text-lg">{address?.address_line1}</p>
+        <p>{address?.address_line2}</p>
+        <p className="mt-2 text-indigo-700">
+          {address?.city}, {address?.district_or_ward}
+        </p>
+        <p>
+          {address?.state_or_region} - {address?.postal_code}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function getCountryName(countries: Country[], uuid?: string) {
   if (!uuid) return "-";
   return countries.find((c) => c.country_uuid === uuid)?.country_name || uuid;
 }
+
 function getRelationName(relations: Relation[], uuid?: string) {
   if (!uuid) return "-";
-  return (
-    relations.find((r) => r.relation_uuid === uuid)?.relation_name || uuid
-  );
+  return relations.find((r) => r.relation_uuid === uuid)?.relation_name || uuid;
 }
-
-
-function Section({
-  title,
-  children,
-  onEdit,
-}: {
-  title: string;
-  children: React.ReactNode;
-  onEdit: () => void;
-}) {
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-      <div className="flex justify-between items-center px-6 py-4 border-b">
-        <h2 className="text-lg font-semibold text-gray-800">
-          {title}
-        </h2>
-        <button
-          onClick={onEdit}
-          className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-        >
-          Edit
-        </button>
-      </div>
-
-      <div className="p-6 space-y-4">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-
-
-  /* ===================== UI ===================== */
-
-  return (
-  <div className="max-w-5xl mx-auto p-6 space-y-6 bg-gray-50 min-h-screen">
-    {/* HEADER */}
-    <h1 className="text-2xl font-semibold">Preview & Submit Onboarding</h1>
-
-    {!isDataComplete && (
-      <p className="text-red-600 text-sm">
-        ⚠ Please complete all sections before submitting.
-      </p>
-    )}
-    <p className="text-sm text-gray-500">
-      Please review all details before final submission
-    </p>
-
-    {/* ================= PERSONAL DETAILS ================= */}
-    <Section
-      title="Personal Details"
-      onEdit={() => router.push(`/onboarding/${token}/personal-details`)}
-    >
-      <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-2">
-        <PreviewRow label="First Name" value={personalDetails?.first_name} />
-        <PreviewRow label="Last Name" value={personalDetails?.last_name} />
-          <PreviewRow label="Email" value={personalDetails?.email} />
-        <PreviewRow
-          label="Contact Number"
-          value={personalDetails?.contact_number}
-        />
-        <PreviewRow
-          label="Date of Birth"
-          value={personalDetails?.date_of_birth}
-        />
-
-        <PreviewRow label="Gender" value={personalDetails?.gender} />
-        <PreviewRow
-          label="Marital Status"
-          value={personalDetails?.marital_status}
-        />
-
-        <PreviewRow
-          label="Blood Group"
-          value={personalDetails?.blood_group}
-        />
-
-        <PreviewRow
-          label="Nationality"
-          value={getCountryName(countries, personalDetails?.nationality_country_uuid)}
-        />
-        <PreviewRow
-          label="Residence"
-          value={getCountryName(countries, personalDetails?.residence_country_uuid)}
-        />
-       <PreviewRow
-  label="Emergency Contact Name"
-  value={personalDetails?.emergency_contact_name}
-/>
-
-<PreviewRow
-  label="Emergency Contact Phone"
-  value={personalDetails?.emergency_contact_phone}
-/>
-
-<PreviewRow
-  label="Emergency Contact Relation"
-  value={getRelationName(relations, personalDetails?.emergency_contact_relation_uuid)}
-/>
-      </div>
-    </Section>
-
-    {/* ================= ADDRESS DETAILS ================= */}
-    <Section
-      title="Address Details"
-      onEdit={() => router.push(`/onboarding/${token}/address-details`)}
-    >
-      {showCombined ? (
-        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-2">
-          <h3 className="font-semibold mb-3">
-            Permanent & Temporary Address
-          </h3>
-
-          <PreviewRow label="Address Line 1" value={permanentAddress?.address_line1} />
-          <PreviewRow label="Address Line 2" value={permanentAddress?.address_line2} />
-          <PreviewRow label="City" value={permanentAddress?.city} />
-          <PreviewRow label="District / Ward" value={permanentAddress?.district_or_ward} />
-          <PreviewRow label="State / Region" value={permanentAddress?.state_or_region} />
-          <PreviewRow label="Postal Code" value={permanentAddress?.postal_code} />
-        </div>
-      ) : (
-        <>
-          {permanentAddress && hasAddressData(permanentAddress) && (
-            <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-2">
-              <h3 className="font-semibold mb-3">Permanent Address</h3>
-
-              <PreviewRow label="Address Line 1" value={permanentAddress.address_line1} />
-              <PreviewRow label="Address Line 2" value={permanentAddress.address_line2} />
-              <PreviewRow label="City" value={permanentAddress.city} />
-              <PreviewRow label="District / Ward" value={permanentAddress.district_or_ward} />
-              <PreviewRow label="State / Region" value={permanentAddress.state_or_region} />
-              <PreviewRow label="Postal Code" value={permanentAddress.postal_code} />
-            </div>
-          )}
-
-          {temporaryAddress && hasAddressData(temporaryAddress) && (
-            <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-2">
-              <h3 className="font-semibold mb-3">Temporary Address</h3>
-
-              <PreviewRow label="Address Line 1" value={temporaryAddress.address_line1} />
-              <PreviewRow label="Address Line 2" value={temporaryAddress.address_line2} />
-              <PreviewRow label="City" value={temporaryAddress.city} />
-              <PreviewRow label="District / Ward" value={temporaryAddress.district_or_ward} />
-              <PreviewRow label="State / Region" value={temporaryAddress.state_or_region} />
-              <PreviewRow label="Postal Code" value={temporaryAddress.postal_code} />
-            </div>
-          )}
-        </>
-      )}
-    </Section>
-
-    {/* ================= IDENTITY DOCUMENTS ================= */}
-    <Section
-    title="Identity Documents"
-    onEdit={() => router.push(`/onboarding/${token}/identity-documents`)}
-  >
-    {identityList.map((doc, idx) => (
-      <div
-        key={idx}
-        className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-2"
-      >
-        <PreviewRow label="Document Type" value={doc.identity_type_name} />
-        <PreviewRow
-              label="Document Number"
-              value={doc.identity_file_number}
-            />
-        <div className="grid grid-cols-3 gap-2 mt-2">
-          <span className="font-medium">Uploaded File</span>
-          <span className="col-span-2 text-blue-600">
-          📄 {doc.file_path
-            ? getFileName(doc.file_path)
-            : doc.file?.name || "No file uploaded"}
-          </span>
-        </div>
-      </div>
-    ))}
-  </Section>
-
-    {/* ================= EDUCATION DETAILS ================= */}
-    <Section
-      title="Education Details"
-      onEdit={() => router.push(`/onboarding/${token}/education-details`)}
-    >
-      {educationList.map((edu, idx) => (
-        <div
-          key={idx}
-          className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-2"
-        >
-           <h3 className="font-semibold mb-3 capitalize">
-            {edu.education_name}
-          </h3>
-          <PreviewRow
-            label="Institute Name"
-            value={edu.institution_name}
-          />
-          <PreviewRow
-            label="Specialization"
-            value={edu.specialization}
-          />
-          <PreviewRow
-            label="Institute Location"
-            value={edu. institute_location}
-          />
-          <PreviewRow
-            label="Education Mode"
-            value={edu.education_mode}
-          />
-          <PreviewRow
-            label="Start Year"
-            value={edu.start_year}
-          />
-          <PreviewRow
-            label="Year of Passing"
-            value={edu.year_of_passing}
-          />
-          <PreviewRow
-            label="Percentage / CGPA"
-            value={edu.percentage_cgpa}
-          />
-          <PreviewRow
-            label="Delay Reason"
-            value={edu.delay_reason}
-          />
-
-          {edu.documents?.map((doc, docIdx) => (
-            <div key={docIdx} className="mt-3 space-y-1">
-              <div className="grid grid-cols-3 gap-2">
-                <span className="font-medium">Document Name</span>
-                <span className="col-span-2 text-gray-700">
-                  {doc.document_name}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <span className="font-medium">Uploaded File</span>
-                <span className="col-span-2 text-blue-600">
-                  📄 {doc.file_path ? getFileName(doc.file_path) : "No file uploaded"}
-                </span>
-              </div>
-            </div>
-          ))}
-
-        </div>
-      ))}
-    </Section>
-
-    {/* ================= EXPERIENCE DETAILS ================= */}
-    <Section
-      title="Experience Details"
-      onEdit={() => router.push(`/onboarding/${token}/experience-details`)}
-    >
-      {experienceDetails.map((exp, idx) => (
-        <div
-          key={idx}
-          className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-2"
-        >
-          <PreviewRow label="Company Name" value={exp.company_name} />
-          <PreviewRow label="Role / Designation" value={exp.role_title} />
-          <PreviewRow label="Start Date" value={exp.start_date} />
-          <PreviewRow label="End Date" value={exp.is_current === 1 ? "Present" : exp.end_date} />
-          <PreviewRow
-            label="Employment Type"
-            value={exp.employment_type}
-          />
-          
-        {exp.is_current === 1 && exp.notice_period_days !== undefined && (
-          <PreviewRow
-            label="Notice Period (Days)"
-            value={exp.notice_period_days}
-          />
-        )}
-        {exp.documents
-        ?.filter(
-          (doc) =>
-            (doc.file_path || doc.file) &&
-            doc.doc_type !== "internship_certificate_path"
-        )
-        .map((doc, docIdx) => {
-          const docName =
-            doc.document_name ||
-            DOCUMENT_LABELS[doc.doc_type || ""] ||
-            doc.doc_type;
-            
-          const fileName = doc.file_path
-            ? getFileName(doc.file_path)
-            : doc.file?.name || "No file uploaded";
-
-          return (
-            <div key={docIdx} className="mt-3 space-y-1">
-              <div className="grid grid-cols-3 gap-2">
-                <span className="font-medium">Document Name</span>
-                <span className="col-span-2 text-gray-700">
-                  {docName || "-"}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <span className="font-medium">Uploaded File</span>
-                <span className="col-span-2 text-blue-600">
-                  📄 {fileName}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-
-        </div>
-      ))}
-    </Section>
-
-    {/* ================= CONFIRM ================= */}
-    <div className="border rounded-md p-4 bg-white">
-      <label className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={confirmed}
-          onChange={(e) => setConfirmed(e.target.checked)}
-        />
-        <span>
-          I confirm that all details provided above are correct
-        </span>
-      </label>
-    </div>
-
-    {/* ================= SUBMIT ================= */}
-    <div className="flex justify-end">
-      <button
-        disabled={isSubmitDisabled}
-        onClick={handleSubmit}
-        className={`px-6 py-2 rounded text-white ${
-          isSubmitDisabled
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-blue-600 hover:bg-blue-700"
-        }`}
-      >
-        {loading ? "Submitting..." : "Submit Onboarding"}
-      </button>
-    </div>
-  </div>
-);
-};
 
 

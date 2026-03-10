@@ -5,6 +5,11 @@ import { useParams, useRouter } from "next/navigation";
 import { useLocalStorageForm } from "../hooks/localStorage";
 import toast from "react-hot-toast";
 import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
+import { FormField, TextInput, SelectInput } from "@/app/components/onboarding/FormComponents";
+import { Button } from "@/app/components/onboarding/ButtonComponents";
+import { ErrorAlert } from "@/app/components/onboarding/AlertsComponents";
+import { validations, errorMessages } from "@/app/utils/validations";
+
 /* ===================== TYPES ===================== */
 
 interface Country {
@@ -24,7 +29,6 @@ interface AddressForm {
   country_uuid: string;
 }
 
-/** 👇 Draft structure stored in Zustand */
 interface AddressDraft {
   permanent: AddressForm;
   current: AddressForm;
@@ -63,604 +67,457 @@ export default function AddressDetailsPage() {
   const [countries, setCountries] = useState<Country[]>([]);
   const [sameAsPermanent, setSameAsPermanent] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const hasLoadedRef = useRef(false);
-const [userUuid, setUserUuid] = useState<string | null>(null);
+  const [userUuid, setUserUuid] = useState<string | null>(null);
 
-const [draft, setDraft  ] = useLocalStorageForm<AddressDraft>(
-  `address-details-${token}`,
-  {
-    permanent: emptyPermanentAddress,
-    current: emptyTemporaryAddress,
+  // Validation errors
+  const [fieldErrors, setFieldErrors] = useState<Record<string, Record<string, string>>>({
+    permanent: {},
+    current: {},
+  });
+
+  const [draft, setDraft] = useLocalStorageForm<AddressDraft>(
+    `address-details-${token}`,
+    {
+      permanent: emptyPermanentAddress,
+      current: emptyTemporaryAddress,
+    }
+  );
+
+  const permanent = draft?.permanent ?? emptyPermanentAddress;
+  const current = draft?.current ?? emptyTemporaryAddress;
+
+  const [originalDraft, setOriginalDraft] = useState<AddressDraft | null>(null);
+  const [permanentUuid, setPermanentUuid] = useState<string | null>(null);
+  const [temporaryUuid, setTemporaryUuid] = useState<string | null>(null);
+  const isSubmittingRef = useRef(false);
+
+  function isEqual(a: AddressForm, b: AddressForm) {
+    return (
+      a.address_line1 === b.address_line1 &&
+      a.address_line2 === b.address_line2 &&
+      a.city === b.city &&
+      a.district_or_ward === b.district_or_ward &&
+      a.state_or_region === b.state_or_region &&
+      a.postal_code === b.postal_code &&
+      a.country_uuid === b.country_uuid
+    );
   }
-);
 
-const permanent = draft?.permanent ?? emptyPermanentAddress;
-const current = draft?.current ?? emptyTemporaryAddress;
+  /* ----------- VALIDATION ----------- */
+  const validateField = (fieldName: keyof AddressForm, value: string): string => {
+    switch (fieldName) {
+      case "address_line1":
+      case "address_line2":
+        if (!value.trim()) return errorMessages.REQUIRED;
+        if (!validations.minLength(value, 3)) return errorMessages.MIN_LENGTH(3);
+        return "";
 
-const [originalDraft, setOriginalDraft] = useState<AddressDraft | null>(null);
-const [permanentUuid, setPermanentUuid] = useState<string | null>(null);
-const [temporaryUuid, setTemporaryUuid] = useState<string | null>(null);
-const isSubmittingRef = useRef(false);
+      case "city":
+      case "district_or_ward":
+      case "state_or_region":
+        if (!value.trim()) return errorMessages.REQUIRED;
+        if (!validations.isValidName(value)) return "Must contain only letters";
+        return "";
 
+      case "postal_code":
+        if (!value.trim()) return errorMessages.REQUIRED;
+        if (!validations.isValidPincode(value)) return "Must be exactly 6 digits";
+        return "";
 
-function isEqual(a: AddressForm, b: AddressForm) {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
+      case "country_uuid":
+        if (!value) return errorMessages.REQUIRED;
+        return "";
 
-function validateAddress(address: AddressForm) {
-  const nameRegex = /^[A-Za-z\s\-'.]+$/;
-  const postalRegex = /^\d{6}$/;
+      default:
+        return "";
+    }
+  };
 
-  if (!address.address_line1.trim()) return "Address Line 1 is required";
-  if (!address.address_line2.trim()) return "Address Line 2 is required";
+  const validateAddressSection = (type: "permanent" | "current"): boolean => {
+    const address = type === "permanent" ? permanent : current;
+    const newErrors: Record<string, string> = {};
 
-  if (!address.city.trim()) return "City is required";
-  if (!nameRegex.test(address.city))
-    return "City must contain only letters";
+    (Object.keys(address) as Array<keyof AddressForm>).forEach((key) => {
+      if (key === "address_type") return;
+      const error = validateField(key, address[key]);
+      if (error) newErrors[key] = error;
+    });
 
-  if (!address.district_or_ward.trim())
-    return "District / Ward is required";
-  if (!nameRegex.test(address.district_or_ward))
-    return "District / Ward must contain only letters";
+    setFieldErrors((prev) => ({
+      ...prev,
+      [type]: newErrors,
+    }));
 
-  if (!address.state_or_region.trim())
-    return "State / Region is required";
-
-  if (!nameRegex.test(address.state_or_region))
-    return "State must contain only letters";
-
-  if (!postalRegex.test(address.postal_code))
-    return "Postal Code must be exactly 6 digits";
-
-  if (!address.country_uuid)
-    return "Please select a country";
-
-  return null;
-}
+    return Object.keys(newErrors).length === 0;
+  };
 
   /* ---------------- FETCH COUNTRIES ---------------- */
 
   useEffect(() => {
     fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/masters/country`)
       .then((res) => res.json())
-      .then((data: Country[]) =>
-        setCountries(data.filter((c) => c.is_active))
-      )
+      .then((data: Country[]) => setCountries(data.filter((c) => c.is_active)))
       .catch(() => setError("Failed to load countries"));
   }, []);
 
-useEffect(() => {
-  if (!token || hasLoadedRef.current) return;
-  hasLoadedRef.current = true;
+  useEffect(() => {
+    if (!token || hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
 
-  try {
-    fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`
-    )
+    fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`)
       .then((res) => res.json())
       .then((uuid: string) => setUserUuid(uuid))
-      .catch(() => {
-        // ignore token verification errors
-      });
-  } catch {
-    // ignore bad local storage
-  }
-}, [token]);
+      .catch(() => {});
+  }, [token]);
 
-useEffect(() => {
-  if (!token) return;
-  const perm = localStorage.getItem(`address-uuid-permanent-${token}`);
-  const temp = localStorage.getItem(`address-uuid-temporary-${token}`);
-  if (perm) setPermanentUuid(perm);
-  if (temp) setTemporaryUuid(temp);
-  const storedSnapshot = localStorage.getItem(`address-snapshot-${token}`);
-  if (storedSnapshot) {
-    try {
-      setOriginalDraft(JSON.parse(storedSnapshot) as AddressDraft);
-    } catch {
-      // ignore bad snapshot
+  useEffect(() => {
+    if (!token) return;
+    const perm = localStorage.getItem(`address-uuid-permanent-${token}`);
+    const temp = localStorage.getItem(`address-uuid-temporary-${token}`);
+    if (perm) setPermanentUuid(perm);
+    if (temp) setTemporaryUuid(temp);
+    
+    const storedSnapshot = localStorage.getItem(`address-snapshot-${token}`);
+    if (storedSnapshot) {
+      try {
+        setOriginalDraft(JSON.parse(storedSnapshot) as AddressDraft);
+      } catch {}
     }
-  }
-}, [token]);
+  }, [token]);
+
   /* ---------------- HANDLERS ---------------- */
 
   const handlePermanentChange = (
-  e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-) => {
-  const { name, value } = e.target;
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    const fieldName = name as keyof AddressForm;
 
-  setDraft((prev) => {
-    const updatedPermanent: AddressForm = {
-      ...prev.permanent,
-      address_type: "permanent" as const,
-      [name]: value,
-    };
+    setDraft((prev) => {
+      const updatedPermanent: AddressForm = {
+        ...prev.permanent,
+        [fieldName]: value,
+      };
 
-  return {
-    permanent: updatedPermanent,
-    current: sameAsPermanent
-      ? { ...updatedPermanent, address_type: "current" }
-      : prev.current,
+      return {
+        permanent: updatedPermanent,
+        current: sameAsPermanent
+          ? { ...updatedPermanent, address_type: "current" }
+          : prev.current,
+      };
+    });
+
+    if (fieldErrors.permanent[name]) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        permanent: { ...prev.permanent, [name]: "" },
+      }));
+    }
+    if (sameAsPermanent && fieldErrors.current[name]) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        current: { ...prev.current, [name]: "" },
+      }));
+    }
   };
-});
-
-};
 
   const handleTemporaryChange = (
-  e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-) => {
-  const { name, value } = e.target;
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    setDraft((prev) => ({
+      ...prev,
+      current: { ...prev.current, [name]: value },
+    }));
 
-  setDraft((prev) => ({
-    permanent: prev.permanent,
-    current: { ...prev.current, 
-      address_type: "current",
-      [name]: value },
-  }));
-};
+    if (fieldErrors.current[name]) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        current: { ...prev.current, [name]: "" },
+      }));
+    }
+  };
 
   const handleSameAsPermanent = (checked: boolean) => {
     setSameAsPermanent(checked);
-
-    setDraft((prev) => {
-      if (checked) {
-        return {
-          permanent: prev.permanent,
-          current: { ...prev.permanent, address_type: "current" },
-        };
-      }
-
-      return prev;
-    });
+    setDraft((prev) => ({
+      ...prev,
+      current: checked ? { ...prev.permanent, address_type: "current" } : prev.current,
+    }));
+    if (checked) {
+      setFieldErrors((prev) => ({ ...prev, current: {} }));
+    }
   };
 
-const handleContinue = async () => {
-  if (isSubmittingRef.current) return;
-  isSubmittingRef.current = true;
+  const handleContinue = async () => {
+    if (isSubmittingRef.current) return;
 
-  setError("");
-  setGlobalLoading(true);
+    const isPermValid = validateAddressSection("permanent");
+    const isCurrValid = sameAsPermanent || validateAddressSection("current");
 
-  // Validate Permanent Address
-  const permanentError = validateAddress(permanent);
-
-  if (permanentError) {
-    toast.error(permanentError);
-    setError(permanentError);
-    setGlobalLoading(false);
-    isSubmittingRef.current = false;
-    return;
-  }
-
-  // Validate Temporary Address
-  if (!sameAsPermanent) {
-    const tempError = validateAddress(current);
-
-    if (tempError) {
-      toast.error(tempError);
-      setError(tempError);
-      setGlobalLoading(false);
-      isSubmittingRef.current = false;
+    if (!isPermValid || !isCurrValid) {
+      toast.error("Please fill all required fields correctly");
       return;
     }
-  }
 
-  try {
-    if (!userUuid) throw new Error();
+    isSubmittingRef.current = true;
+    setError("");
+    setLoading(true);
+    setGlobalLoading(true);
 
-    // const saveAddress = async (
-    //   current: AddressForm,
-    //   original: AddressForm | null,
-    //   uuid: string | null,
-    //   setUuid: (id: string) => void
-    // ) => {
-    //   const payload = {
-    //     user_uuid: userUuid,
-    //     address_type: current.address_type,
-    //     address_line1: current.address_line1,
-    //     address_line2: current.address_line2,
-    //     city: current.city,
-    //     district_or_ward: current.district_or_ward,
-    //     state_or_region: current.state_or_region,
-    //     country_uuid: current.country_uuid,
-    //     postal_code: current.postal_code,
-       
-    //   };
+    try {
+      if (!userUuid) throw new Error("User UUID not found");
 
-    //   // 🟢 FIRST TIME → POST
-    //   if (!uuid) {
-    //     const res = await fetch(
-    //       `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/address`,
-    //       {
-    //         method: "POST",
-    //         headers: { "Content-Type": "application/json" },
-    //         body: JSON.stringify(payload),
-    //       }
-    //     );
+      const saveAddress = async (
+        currentAddr: AddressForm,
+        originalAddr: AddressForm | null,
+        address_uuid: string | null,
+        setUuid: (id: string) => void
+      ) => {
+        const payload = {
+          user_uuid: userUuid,
+          address_type: currentAddr.address_type,
+          address_line1: currentAddr.address_line1,
+          address_line2: currentAddr.address_line2,
+          city: currentAddr.city,
+          district_or_ward: currentAddr.district_or_ward,
+          state_or_region: currentAddr.state_or_region,
+          country_uuid: currentAddr.country_uuid,
+          postal_code: currentAddr.postal_code,
+        };
 
-    //     if (!res.ok) throw new Error();
+        if (address_uuid && originalAddr && isEqual(originalAddr, currentAddr)) return;
 
-    //     const data = await res.json();
-    //     setUuid(data.address_uuid); // 🔥 critical
-    //     if (current.address_type === "permanent") {
-    //       localStorage.setItem(
-    //         `address-uuid-permanent-${token}`,
-    //         data.address_uuid
-    //       );
-    //     } else {
-    //       localStorage.setItem(
-    //         `address-uuid-temporary-${token}`,
-    //         data.address_uuid
-    //       );
-    //     }
-
-    //     toast.success(`${current.address_type} address saved`);
-    //   }
-
-    //   // 🔵 AFTER FIRST TIME → PUT (only if changed)
-    //   else if (!original || !isEqual(original, current)) {
-    //     const res = await fetch(
-    //       `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/address/${uuid}`,
-    //       {
-    //         method: "PUT",
-    //         headers: { "Content-Type": "application/json" },
-    //         body: JSON.stringify(payload),
-    //       }
-    //     );
-
-    //     if (!res.ok) throw new Error();
-
-    //     toast.success(`${current.address_type} address updated`);
-    //   }
-    // };
-
-    const saveAddress = async (
-    current: AddressForm,
-    original: AddressForm | null,
-    address_uuid: string | null,
-    setUuid: (id: string) => void
-  ) => {
-    const payload = {
-      user_uuid: userUuid,
-      address_type: current.address_type,
-      address_line1: current.address_line1,
-      address_line2: current.address_line2,
-      city: current.city,
-      district_or_ward: current.district_or_ward,
-      state_or_region: current.state_or_region,
-      country_uuid: current.country_uuid,
-      postal_code: current.postal_code,
-    };
-
-    // 🟡 skip if no change
-    if (address_uuid && original && isEqual(original, current)) return;
-
-    // 🔵 UPDATE
-    if (address_uuid) {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/address/${address_uuid}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+        if (address_uuid) {
+          const res = await fetch(
+            `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-details/address/${address_uuid}`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            }
+          );
+          if (!res.ok) throw new Error();
+          toast.success(`${currentAddr.address_type} address updated`);
+        } else {
+          const res = await fetch(
+            `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/address`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            }
+          );
+          if (!res.ok) throw new Error();
+          const data = await res.json();
+          const newUuid = data.address_uuid;
+          setUuid(newUuid);
+          localStorage.setItem(`address-uuid-${currentAddr.address_type}-${token}`, newUuid);
+          toast.success(`${currentAddr.address_type} address saved`);
         }
-      );
+      };
 
-      if (res.status === 409) {
-        const err = await res.json();
-        toast.error(err.detail);
-        return;
-      }
+      const tasks = [];
+      tasks.push(saveAddress(permanent, originalDraft?.permanent || null, permanentUuid, setPermanentUuid));
+      
+      const currentToSave = sameAsPermanent ? { ...permanent, address_type: "current" as const } : current;
+      tasks.push(saveAddress(currentToSave, originalDraft?.current || null, temporaryUuid, setTemporaryUuid));
 
-      if (!res.ok) throw new Error();
+      await Promise.all(tasks);
 
-      toast.success(`${current.address_type} address updated`);
-    }
-
-    // 🟢 CREATE
-    else {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/address`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      if (!res.ok) throw new Error();
-
-      const data = await res.json();
-      const newUuid = data.address_uuid;
-
-      setUuid(newUuid);
-
-      if (current.address_type === "permanent") {
-        localStorage.setItem(`address-uuid-permanent-${token}`, newUuid);
-      } else {
-        localStorage.setItem(`address-uuid-temporary-${token}`, newUuid);
-      }
-
-      toast.success(`${current.address_type} address saved`);
-    }
-};
-
-    const permanentChanged =
-      !originalDraft || !isEqual(originalDraft.permanent, permanent);
-
-    const temporaryChanged =
-      !sameAsPermanent &&
-      (!originalDraft || !isEqual(originalDraft.current, current));
-
-    // 🟡 NO CHANGES → JUST MOVE
-    if (
-      originalDraft &&
-      !permanentChanged &&
-      !temporaryChanged &&
-      !sameAsPermanent
-    ) {
-      toast("No changes detected. Moving to next step.");
+      const snapshot: AddressDraft = {
+        permanent: { ...permanent },
+        current: { ...currentToSave },
+      };
+      setOriginalDraft(snapshot);
+      localStorage.setItem(`address-snapshot-${token}`, JSON.stringify(snapshot));
+      
       router.push(`/onboarding/${token}/identity-documents`);
-      return;
+    } catch {
+      toast.error("Failed to save address details");
+      setError("Failed to save address details");
+    } finally {
+      isSubmittingRef.current = false;
+      setLoading(false);
+      setGlobalLoading(false);
     }
+  };
 
-    const tasks: Promise<void>[] = [];
-
-    if (permanentChanged || !permanentUuid) {
-      tasks.push(
-        saveAddress(
-          permanent,
-          originalDraft?.permanent || null,
-          permanentUuid,
-          setPermanentUuid
-        )
-      );
-    }
-
-    if (sameAsPermanent) {
-      tasks.push(
-        saveAddress(
-          {...permanent, address_type: "current" },
-          originalDraft?.current|| null,
-          temporaryUuid,
-          setTemporaryUuid
-        )
-      );
-    }else if (temporaryChanged || !temporaryUuid) {
-      tasks.push(
-        saveAddress(
-          current,
-          originalDraft?.current || null,
-          temporaryUuid,
-          setTemporaryUuid
-        )
-      );
-    }
-
-    await Promise.all(tasks);
-
-    // Mirror permanent UUID into temporary when Same-as-Permanent
-  const snapshot: AddressDraft = {
-  permanent: { ...permanent },
-  current: sameAsPermanent
-    ? { ...permanent, address_type: "current" }
-    : { ...current },
-};
-    setOriginalDraft(snapshot);
-    localStorage.setItem(
-      `address-snapshot-${token}`,
-      JSON.stringify(snapshot)
-    );
-    router.push(`/onboarding/${token}/identity-documents`);
-  } catch {
-    toast.error("Failed to save address details");
-    setError("Failed to save address details");
-  } finally {
-    isSubmittingRef.current = false;
-    setGlobalLoading(false);
-  }
-};
   /* ===================== UI ===================== */
 
   return (
-    <div style={pageWrapper}>
-      <div style={cardStyle}>
-        <h2 style={titleStyle}>Address Details</h2>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-white py-8">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-200/30 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-200/30 rounded-full blur-3xl"></div>
+      </div>
 
-        <p style={{ fontSize: 13, marginBottom: 16, color: "#374151" }}>
-          <span style={{ color: "#dc2626" }}>*</span> indicates required fields
-        </p>
+      <div className="relative mx-auto max-w-5xl rounded-2xl bg-white/95 backdrop-blur-lg p-8 shadow-xl border border-indigo-100">
+        <h2 className="mb-6 text-3xl font-bold text-indigo-900">Address Details</h2>
 
-        {error && <p style={{ color: "red" }}>{error}</p>}
+        {error && <ErrorAlert message={error} onClose={() => setError("")} />}
 
-        <h3 style={sectionTitle}>Permanent Address</h3>
-        <AddressFormUI
-          data={permanent}
-          onChange={handlePermanentChange}
-          countries={countries}
-        />
-
-        <label style={{ display: "flex", gap: 8, margin: "16px 0" }}>
-          <input
-            type="checkbox"
-            checked={sameAsPermanent}
-            onChange={(e) => handleSameAsPermanent(e.target.checked)}
-          />
-          Same as Permanent Address
-        </label>
-
-        {!sameAsPermanent && (
-          <>
-            <h3 style={sectionTitle}>Temporary Address</h3>
+        <div className="space-y-8">
+          {/* Permanent Address Section */}
+          <section>
+            <h3 className="mb-4 text-xl font-semibold text-indigo-900 flex items-center gap-2">
+              🏠 Permanent Address
+            </h3>
             <AddressFormUI
-              data={current}
-              onChange={handleTemporaryChange}
+              data={permanent}
+              onChange={handlePermanentChange}
               countries={countries}
+              errors={fieldErrors.permanent}
             />
-          </>
-        )}
+          </section>
 
-        <div style={{ textAlign: "right", marginTop: 24 }}>
-          <button style={submitBtn} onClick={handleContinue}>
-            Save & Continue
-          </button>
+          {/* Same as Permanent Checkbox */}
+          <div className="flex items-center gap-3 p-4 bg-indigo-50 rounded-xl border border-indigo-100">
+            <input
+              type="checkbox"
+              id="sameAsPermanent"
+              className="w-5 h-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+              checked={sameAsPermanent}
+              onChange={(e) => handleSameAsPermanent(e.target.checked)}
+            />
+            <label htmlFor="sameAsPermanent" className="text-indigo-900 font-medium cursor-pointer">
+              Current Address is same as Permanent Address
+            </label>
+          </div>
+
+          {/* Current Address Section */}
+          {!sameAsPermanent && (
+            <section className="pt-4 border-t border-indigo-100">
+              <h3 className="mb-4 text-xl font-semibold text-indigo-900 flex items-center gap-2">
+                📍 Current Address
+              </h3>
+              <AddressFormUI
+                data={current}
+                onChange={handleTemporaryChange}
+                countries={countries}
+                errors={fieldErrors.current}
+              />
+            </section>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-4 pt-6 border-t border-indigo-100">
+            <Button
+              variant="secondary"
+              onClick={() => router.push(`/onboarding/${token}/personal-details`)}
+            >
+              Back
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleContinue}
+              loading={loading}
+              disabled={loading}
+            >
+              {loading ? "Saving..." : "Save & Continue"}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-/* ===================== FORM ===================== */
+/* ===================== FORM UI COMPONENT ===================== */
 
 function AddressFormUI({
   data,
   onChange,
   countries,
+  errors,
 }: {
   data: AddressForm;
-  onChange: (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => void;
+  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
   countries: Country[];
+  errors: Record<string, string>;
 }) {
   return (
-    <>
-      <Field label="Address Line 1" required>
-        <input name="address_line1" 
-        value={data.address_line1} 
-        onChange={onChange} 
-        placeholder="Enter House / Flat No., Building Name, Street Name"
-        style={inputStyle} 
-        required />
-      </Field>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <FormField label="Address Line 1" required error={errors.address_line1} className="md:col-span-2">
+        <TextInput
+          name="address_line1"
+          value={data.address_line1}
+          onChange={onChange}
+          placeholder="House / Flat No., Building Name, Street Name"
+          error={errors.address_line1 ? "true" : ""}
+        />
+      </FormField>
 
-      <Field label="Address Line 2" required>
-        <input name="address_line2" 
-        value={data.address_line2} 
-        onChange={onChange} 
-        placeholder="Area / Locality / landmark" 
-        style={inputStyle} 
-        required />
-      </Field>
+      <FormField label="Address Line 2" required error={errors.address_line2} className="md:col-span-2">
+        <TextInput
+          name="address_line2"
+          value={data.address_line2}
+          onChange={onChange}
+          placeholder="Area / Locality / Landmark"
+          error={errors.address_line2 ? "true" : ""}
+        />
+      </FormField>
 
-      <Field label="City" required>
-        <input name="city" 
-        value={data.city} 
-        onChange={onChange} 
-        placeholder="Enter your City / Near Town"
-        style={inputStyle} 
-        required />
-      </Field>
+      <FormField label="City" required error={errors.city}>
+        <TextInput
+          name="city"
+          value={data.city}
+          onChange={onChange}
+          placeholder="City / Town"
+          error={errors.city ? "true" : ""}
+        />
+      </FormField>
 
-      <Field label="District / Ward" required>
-        <input name="district_or_ward" 
-        value={data.district_or_ward} 
-        onChange={onChange} 
-        placeholder="Enter your District"
-        style={inputStyle} 
-        required />
-      </Field>
+      <FormField label="District / Ward" required error={errors.district_or_ward}>
+        <TextInput
+          name="district_or_ward"
+          value={data.district_or_ward}
+          onChange={onChange}
+          placeholder="District"
+          error={errors.district_or_ward ? "true" : ""}
+        />
+      </FormField>
 
-      <Field label="State / Region" required>
-        <input name="state_or_region" 
-        value={data.state_or_region} 
-        onChange={onChange} 
-        placeholder="Enter your State or Region"
-        style={inputStyle} 
-        required />
-      </Field>
+      <FormField label="State / Region" required error={errors.state_or_region}>
+        <TextInput
+          name="state_or_region"
+          value={data.state_or_region}
+          onChange={onChange}
+          placeholder="State"
+          error={errors.state_or_region ? "true" : ""}
+        />
+      </FormField>
 
-      <Field label="Postal Code" required>
-        <input name="postal_code" 
-        value={data.postal_code} 
-        onChange={
-          (e) => {
-            // Allow only digits and limit to 6 characters
-            const value = e.target.value;
-            if (/^\d{0,6}$/.test(value)) {
-              onChange(e);
-            }
-          }
-        } 
-        placeholder="Enter your Postal Code"
-        style={inputStyle} 
-        required />
-      </Field>
+      <FormField label="Postal Code" required error={errors.postal_code}>
+        <TextInput
+          name="postal_code"
+          value={data.postal_code}
+          onChange={(e) => {
+            if (/^\d{0,6}$/.test(e.target.value)) onChange(e);
+          }}
+          placeholder="6-digit PIN code"
+          maxLength={6}
+          error={errors.postal_code ? "true" : ""}
+        />
+      </FormField>
 
-      <Field label="Country" required>
-        <select name="country_uuid" value={data.country_uuid} onChange={onChange} style={inputStyle} required>
-          <option value="">Select Country</option>
+      <FormField label="Country" required error={errors.country_uuid} className="md:col-span-2">
+        <SelectInput
+          name="country_uuid"
+          value={data.country_uuid}
+          onChange={onChange}
+          placeholder="Select Country"
+          error={errors.country_uuid ? "true" : ""}
+        >
           {countries.map((c) => (
             <option key={c.country_uuid} value={c.country_uuid}>
               {c.country_name}
             </option>
           ))}
-        </select>
-      </Field>
-    </>
-  );
-}
-
-/* ===================== FIELD ===================== */
-
-function Field({ label,required = false,children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <label style={labelStyle}>
-        {label}
-        {required && <span style={{ color: "red", marginLeft: 4 }}>*</span>}
-        </label>
-      {children}
+        </SelectInput>
+      </FormField>
     </div>
   );
 }
-
-/* ===================== STYLES ===================== */
-
-const pageWrapper = {
-  backgroundColor: "#f5f7fb",
-  padding: "32px 0",
-};
-
-const cardStyle = {
-  maxWidth: 600,
-  margin: "0 auto",
-  backgroundColor: "#fff",
-  padding: 24,
-  borderRadius: 8,
-};
-
-const titleStyle = {
-  fontSize: 20,
-  fontWeight: 600,
-  marginBottom: 16,
-};
-
-const sectionTitle = {
-  fontSize: 16,
-  fontWeight: 600,
-  margin: "24px 0 12px",
-};
-
-const labelStyle = {
-  fontSize: 13,
-  fontWeight: 500,
-  marginBottom: 6,
-  display: "block",
-};
-
-const inputStyle = {
-  width: "100%",
-  height: 40,
-  borderRadius: 6,
-  border: "1px solid #d1d5db",
-  padding: "0 12px",
-};
-
-const submitBtn = {
-  backgroundColor: "#2563eb",
-  color: "#fff",
-  padding: "10px 20px", 
-  borderRadius: 6,
-  border: "none",
-};

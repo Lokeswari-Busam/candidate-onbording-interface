@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useRef } from "react";
 import { useLocalStorageForm } from "../hooks/localStorage";
 import toast from "react-hot-toast";
 import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
+import { FormField, TextInput, SelectInput } from "@/app/components/onboarding/FormComponents";
+import { Button } from "@/app/components/onboarding/ButtonComponents";
+import { ErrorAlert } from "@/app/components/onboarding/AlertsComponents";
+import { validations, errorMessages } from "@/app/utils/validations";
 
 /* ===================== TYPES ===================== */
 
@@ -50,6 +53,10 @@ export default function IdentityDocumentsPage() {
   const [countries, setCountries] = useState<Country[]>([]);
   const [identityTypes, setIdentityTypes] = useState<IdentityType[]>([]);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // Validation errors
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [draft, setDraft] = useLocalStorageForm<IdentityDraft>(
     `identity-details-${token}`,
@@ -118,7 +125,7 @@ export default function IdentityDocumentsPage() {
 
       return { ...prev, documents: merged };
     });
-  }, [identityTypes]);
+  }, [identityTypes, setDraft]);
 
   /* ===================== SNAPSHOT ONCE ===================== */
 
@@ -126,9 +133,11 @@ export default function IdentityDocumentsPage() {
     if (!token) return;
     if (snapshotDoneRef.current) return;
 
-    snapshotDoneRef.current = true;
-    setOriginalDraft(JSON.parse(JSON.stringify(draft)));
-  }, [token]);
+    if (draft.documents.length > 0) {
+      snapshotDoneRef.current = true;
+      setOriginalDraft(JSON.parse(JSON.stringify(draft)));
+    }
+  }, [token, draft]);
 
   /* ===================== FETCH USER UUID ONCE ===================== */
 
@@ -152,7 +161,7 @@ export default function IdentityDocumentsPage() {
     if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
-      setError("File must be less than 5 MB");
+      toast.error("File must be less than 5 MB");
       return;
     }
 
@@ -164,6 +173,15 @@ export default function IdentityDocumentsPage() {
           : d
       ),
     }));
+
+    // Clear error for this field
+    if (fieldErrors[identityType.identity_type_uuid + "_file"]) {
+      setFieldErrors(prev => {
+        const next = { ...prev };
+        delete next[identityType.identity_type_uuid + "_file"];
+        return next;
+      });
+    }
   };
 
   const handleIdentityNumberChange = (
@@ -178,6 +196,27 @@ export default function IdentityDocumentsPage() {
           : d
       ),
     }));
+
+    // Clear error for this field
+    if (fieldErrors[identityType.identity_type_uuid]) {
+      setFieldErrors(prev => {
+        const next = { ...prev };
+        delete next[identityType.identity_type_uuid];
+        return next;
+      });
+    }
+  };
+
+  /* ===================== OPEN IN NEW TAB ===================== */
+
+  const openDocumentInNewTab = (file?: File, filePath?: string) => {
+    if (file) {
+      const url = URL.createObjectURL(file);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+    } else if (filePath) {
+      window.open(filePath, "_blank");
+    }
   };
 
   /* ===================== CHANGE DETECTION ===================== */
@@ -199,28 +238,38 @@ export default function IdentityDocumentsPage() {
   /* ===================== CONTINUE ===================== */
 
   const handleContinue = async () => {
+    setLoading(true);
     setGlobalLoading(true);
+    setError("");
+
+    const newErrors: Record<string, string> = {};
+    const mandatoryDocs = identityTypes.filter((d) => d.is_mandatory);
+
+    for (const type of mandatoryDocs) {
+      const doc = documents.find(
+        (d) => d.identity_type_uuid === type.identity_type_uuid
+      );
+
+      if (!doc?.identity_file_number?.trim()) {
+        newErrors[type.identity_type_uuid] = errorMessages.REQUIRED;
+      }
+
+      const hasFile = isBrowserFile(doc?.file) || doc?.file_path || doc?.identity_uuid;
+      if (!hasFile) {
+        newErrors[type.identity_type_uuid + "_file"] = "File upload is required";
+      }
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setFieldErrors(newErrors);
+      toast.error("Please complete all mandatory fields and uploads");
+      setLoading(false);
+      setGlobalLoading(false);
+      return;
+    }
 
     try {
-      if (!userUuid) throw new Error();
-
-      const mandatoryDocs = identityTypes.filter((d) => d.is_mandatory);
-
-      for (const type of mandatoryDocs) {
-        const doc = documents.find(
-          (d) => d.identity_type_uuid === type.identity_type_uuid
-        );
-
-        if (!doc?.identity_file_number?.trim()) {
-          setError(`Please complete ${type.identity_type_name}`);
-          return;
-        }
-
-        if (!doc.identity_uuid && !isBrowserFile(doc.file) && !doc.file_path) {
-          setError(`Please upload ${type.identity_type_name}`);
-          return;
-        }
-      }
+      if (!userUuid) throw new Error("User UUID not found");
 
       if (!hasChanges()) {
         toast("No changes detected. Moving to next step.");
@@ -229,6 +278,12 @@ export default function IdentityDocumentsPage() {
       }
 
       for (const doc of documents) {
+        // Skip if nothing changed for this specific document and it's already saved
+        const old = originalDraft?.documents.find(d => d.identity_type_uuid === doc.identity_type_uuid);
+        if (old && old.identity_file_number === doc.identity_file_number && !isBrowserFile(doc.file)) {
+          continue;
+        }
+
         const form = new FormData();
         form.append("mapping_uuid", doc.mapping_uuid);
         form.append("user_uuid", userUuid);
@@ -263,626 +318,154 @@ export default function IdentityDocumentsPage() {
         }));
       }
 
+      toast.success("Identity documents saved successfully");
       router.push(`/onboarding/${token}/education-details`);
     } catch {
       toast.error("Failed to save identity documents");
+      setError("Failed to save identity documents");
     } finally {
+      setLoading(false);
       setGlobalLoading(false);
     }
   };
 
-//   identity_type_uuid: string;
-//   identity_type_name: string;
-//   is_mandatory: boolean;
-// }
-
-// interface IdentityDocument {
-//   mapping_uuid: string;
-//   identity_uuid?: string;
-//   identity_type_uuid: string;
-//   identity_type_name: string;
-//   identity_file_number: string;
-//   file?: File;
-//   file_path?: string;
-// }
-
-
-// interface IdentityDraft {
-//   country_uuid: string;
-//   documents: (IdentityDocument & { file?: File })[];
-// }
-
-
-// /* ===================== COMPONENT ===================== */
-
-// export default function IdentityDocumentsPage() {
-//   const { token } = useParams<{ token: string }>();
-//   const router = useRouter();
-//   const { setLoading: setGlobalLoading } = useGlobalLoading();
-
-
-//   const [countries, setCountries] = useState<Country[]>([]);
-//   const [identityTypes, setIdentityTypes] = useState<IdentityType[]>([]);
-  
-// const [draft, setDraft] = useLocalStorageForm<IdentityDraft>(
-//   `identity-details-${token}`,
-//   {
-//     country_uuid: "",
-//     documents: [],
-//   }
-// );
-
-//   const selectedCountry = draft.country_uuid;
-//   const documents = draft.documents;
-
-
-// const [originalDraft, setOriginalDraft] = useState<IdentityDraft | null>(null);
-// const [userUuid, setUserUuid] = useState<string | null>(null);
-
-// const snapshotDoneRef = useRef(false);
-
-// const [error, setError] = useState("");
-
-
-
-//   /* ===================== FETCH COUNTRIES ===================== */
-
-//   useEffect(() => {
-//     fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/masters/country`)
-//       .then((res) => res.json())
-//       .then((data: Country[]) =>
-//         setCountries(
-//           (Array.isArray(data) ? data : []).filter((c) => c.is_active),
-//         ),
-//       )
-//       .catch(() => setError("Unable to load countries"));
-//   }, []);
-
-//   /* ===================== FETCH IDENTITY TYPES ===================== */
-
-//   useEffect(() => {
-//   if (!selectedCountry) return;
-
-//   fetch(
-//     `${process.env.NEXT_PUBLIC_API_BASE_URL}/identity/country-mapping/identities/${selectedCountry}`
-//   )
-//     .then((res) => res.json())
-//     .then((data) => {
-
-//       const list = Array.isArray(data) ? data : [];
-//       setIdentityTypes(list);
-//     })
-//     .catch(() => setError("Unable to load identity documents"));
-// }, [selectedCountry]);
-
-
-// /* ===================== PREFILL FROM LOCAL STORAGE ===================== */
-
-// useEffect(() => {
-//   if (!identityTypes.length) return;
-
-//   setDraft((prev) => {
-//     if (!prev.documents) return prev;
-
-//     // Merge stored docs with mapping list
-//     const merged = identityTypes.map((type) => {
-//       const stored = prev.documents.find(
-//         (d) => d.identity_type_uuid === type.identity_type_uuid
-//       );
-
-//       if (stored) {
-//         return {
-//           ...stored,
-//           mapping_uuid: type.mapping_uuid, // ensure mapping stays correct
-//         };
-//       }
-
-//       // If no stored value → create empty entry
-//       return {
-//         mapping_uuid: type.mapping_uuid,
-//         identity_type_uuid: type.identity_type_uuid,
-//         identity_type_name: type.identity_type_name,
-//         identity_file_number: "",
-//         file_path: undefined,
-//       };
-//     });
-//     const same = JSON.stringify(prev.documents) === JSON.stringify(merged);
-//     if (same) return prev;
-
-//     return {
-//       ...prev,
-//       documents: merged,
-//     };
-//   });
-// }, [identityTypes]);   // ⚠️ ONLY identityTypes
-
-// useEffect(() => {
-//   if (!token) return;
-//   if (snapshotDoneRef.current) return;   // ⛔ prevent loop
-//   if (!draft) return;
-
-//   snapshotDoneRef.current = true;        // mark done
-//   setOriginalDraft(JSON.parse(JSON.stringify(draft)));
-
-// }, [token, draft])
-
-
-// useEffect(() => {
-//   if (!token) return;
-
-//     (async () => {
-//       try {
-//         const tokenRes = await fetch(
-//           `${process.env.NEXT_PUBLIC_API_BASE_URL}/token-verification/${token}`
-//         );
-//         if (!tokenRes.ok) return;
-//         setUserUuid(await tokenRes.json());
-//       } catch {}
-//     })();
-//   }
-// , [token, draft, originalDraft, userUuid]);
-
-// // Note: Swagger shows only POST and PUT for identity documents.
-// // No GET endpoint is available, so we avoid calling one here to prevent 405.
-
-  
-
-
-
-
-
-//   /* ===================== FILE HANDLING ===================== */
-
-  
-//     const handleFileChange = (identityType: IdentityType, file?: File) => {
-//   if (!file) return;
-
-//   const MAX_SIZE_MB = 5;
-//   if (file.size > MAX_SIZE_MB * 1024 * 1024) {
-//     setError(`File must be less than ${MAX_SIZE_MB} MB`);
-//     return;
-//   }
-
-//   setDraft((prev) => {
-//     const existing = prev.documents.find(
-//       (d) => d.identity_type_uuid === identityType.identity_type_uuid
-//     );
-
-//     const updatedDocs = existing
-//       ? prev.documents.map((d) =>
-//           d.identity_type_uuid === identityType.identity_type_uuid
-//             ? { ...d, file ,
-//               mapping_uuid: identityType.mapping_uuid,
-//             }
-//             : d
-//         )
-//       : [
-//           ...prev.documents,
-//           {
-//             mapping_uuid: identityType.mapping_uuid,
-//             identity_type_uuid: identityType.identity_type_uuid,
-//             identity_type_name: identityType.identity_type_name,
-//             identity_file_number: "",
-//             file,
-//           },
-//         ];
-
-//     return { ...prev, documents: updatedDocs };
-//   });
-// };
-
-
-//   /* ===================== IDENTITY NUMBER HANDLING (NEW) ===================== */
-
-//   const handleIdentityNumberChange = (
-//   identityType: IdentityType,
-//   value: string
-// ) => {
-//   setError("");
-//   setDraft((prev) => {
-//     const existing = prev.documents.find(
-//       (d) => d.identity_type_uuid === identityType.identity_type_uuid
-//     );
-
-//     const updatedDocs = existing
-//       ? prev.documents.map((d) =>
-//           d.identity_type_uuid === identityType.identity_type_uuid
-//             ? { ...d, identity_file_number: value,
-//               mapping_uuid: identityType.mapping_uuid,
-//              }
-//             : d
-//         )
-//       : [
-//           ...prev.documents,
-//           {
-//             mapping_uuid: identityType.mapping_uuid,
-//             identity_type_uuid: identityType.identity_type_uuid,
-//             identity_type_name: identityType.identity_type_name,
-//             identity_file_number: value,
-//             file: undefined as unknown as File,
-//           },
-//         ];
-
-//     return { ...prev, documents: updatedDocs };
-//   });
-// };
-
-      
-
-//   /* ===================== CONTINUE ===================== */
-//    const hasChanges = () => {
-//   if (!originalDraft) return true;
-
-//   const originalDocs = originalDraft.documents;
-
-//   for (const doc of documents) {
-//     const old = originalDocs.find(
-//       (d) => d.identity_type_uuid === doc.identity_type_uuid
-//     );
-
-//     if (!old) return true;
-//     if (old.identity_file_number !== doc.identity_file_number) return true;
-//     if (doc.file) return true;
-//   }
-
-//   return false;
-// };
-
-// const handleContinue = async () => {
-//   setGlobalLoading(true);
-//   try {
-//     if (!userUuid) throw new Error();
-
-//     const mandatoryDocs = identityTypes.filter((d) => d.is_mandatory);
-
-//     // Mandatory validation
-//     for (const type of mandatoryDocs) {
-//       const doc = documents.find(
-//         (d) => d.identity_type_uuid === type.identity_type_uuid
-//       );
-
-//       if (!doc || !doc.identity_file_number?.trim()) {
-//         setError(`Please complete ${type.identity_type_name}`);
-//         return;
-//       }
-
-//       // File required only if no existing identity on server
-//       if (!doc.identity_uuid && !doc.file && !doc.file_path) {
-//         setError(`Please upload ${type.identity_type_name}`);
-//         return;
-//       }
-//     }
-
-//     // 🟢 ACTION 3 — NO CHANGES
-//     if (!hasChanges()) {
-//       toast("No changes detected. Moving to next step.");
-//       router.push(`/onboarding/${token}/education-details`);
-//       return;
-//     }
-
-//     const resolveFilePath = (data: unknown) => {
-//       if (!data || typeof data !== "object") return undefined;
-//       const maybe = data as {
-//         file_path?: string;
-//         filePath?: string;
-//         identity_uuid?: string;
-//       };
-//       return {
-//         file_path:
-//           typeof maybe.file_path === "string"
-//             ? maybe.file_path
-//             : typeof maybe.filePath === "string"
-//               ? maybe.filePath
-//               : undefined,
-//         identity_uuid:
-//           typeof maybe.identity_uuid === "string"
-//             ? maybe.identity_uuid
-//             : undefined,
-//       };
-//     };
-
-//     for (const doc of documents) {
-//       const old = originalDraft?.documents.find(
-//         (d) => d.identity_type_uuid === doc.identity_type_uuid
-//       );
-
-//       const identityUuid = doc.identity_uuid || old?.identity_uuid;
-
-//       // 🟢 ACTION 1 — POST
-//       if (!identityUuid) {
-//         const form = new FormData();
-//         form.append("mapping_uuid", doc.mapping_uuid);
-//         form.append("user_uuid", userUuid);
-//         form.append("identity_file_number", doc.identity_file_number);
-//         if (doc.file) form.append("file", doc.file);
-
-//         const res = await fetch(
-//           `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/identity-documents`,
-//           { method: "POST", body: form }
-//         );
-//         if (!res.ok) throw new Error();
-//         let filePath: string | undefined;
-//         let identityUuid: string | undefined;
-//         try {
-//           const data = await res.json();
-//           const resolved = resolveFilePath(data);
-//           if (resolved) {
-//             filePath = resolved.file_path;
-//             identityUuid = resolved.identity_uuid;
-//           }
-//         } catch {}
-//         if (filePath || identityUuid) {
-//           setDraft((prev) => ({
-//             ...prev,
-//             documents: prev.documents.map((d) =>
-//               d.identity_type_uuid === doc.identity_type_uuid
-//                 ? {
-//                     ...d,
-//                     file_path: filePath ?? d.file_path,
-//                     identity_uuid: identityUuid ?? d.identity_uuid,
-//                   }
-//                 : d
-//             ),
-//           }));
-//         }
-//         toast.success("Identity documents saved successfully");
-//       }
-
-//       // 🟢 ACTION 2 — PUT
-//       else if (
-//         !old ||
-//         old.identity_file_number !== doc.identity_file_number ||
-//         doc.file
-//       ) {
-//         const form = new FormData();
-//         form.append("identity_file_number", doc.identity_file_number);
-//         if (doc.file) form.append("file", doc.file);
-
-//         const endpoint = `${process.env.NEXT_PUBLIC_API_BASE_URL}/employee-upload/identity-documents/${identityUuid}`;
-//         const res = await fetch(endpoint, { method: "PUT", body: form });
-//         if (!res.ok) throw new Error();
-//         let filePath: string | undefined;
-//         let newIdentityUuid: string | undefined;
-//         try {
-//           const data = await res.json();
-//           const resolved = resolveFilePath(data);
-//           if (resolved) {
-//             filePath = resolved.file_path;
-//             newIdentityUuid = resolved.identity_uuid;
-//           }
-//         } catch {}
-//         if (filePath || newIdentityUuid) {
-//           setDraft((prev) => ({
-//             ...prev,
-//             documents: prev.documents.map((d) =>
-//               d.identity_type_uuid === doc.identity_type_uuid
-//                 ? {
-//                     ...d,
-//                     file_path: filePath ?? d.file_path,
-//                     identity_uuid: newIdentityUuid ?? d.identity_uuid,
-//                   }
-//                 : d
-//             ),
-//           }));
-//         }
-//         toast.success("Identity documents updated successfully");
-//       }
-//     }
-
-//     router.push(`/onboarding/${token}/education-details`);
-//   } catch {
-//     toast.error("Failed to save identity documents");
-//   } finally {
-//     setGlobalLoading(false);
-//   }
-// };
-
-    /* ===================== UI ===================== */
-
   return (
-    <div style={pageWrapper}>
-      <div style={cardStyle}>
-        <h2 style={titleStyle}>Identity Details</h2>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-white py-8">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-200/30 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-200/30 rounded-full blur-3xl"></div>
+      </div>
 
-        <Field label="Country *">
-          <select
-            value={selectedCountry}
-            onChange={(e) => {
-              setDraft({
-                country_uuid: e.target.value,
-                documents: [],
-              });
-              setOriginalDraft(null);
-            }}
-            style={inputStyle}
-          >
-            <option value="">Select Country</option>
-            {countries.map((c) => (
-              <option key={c.country_uuid} value={c.country_uuid}>
-                {c.country_name}
-              </option>
-            ))}
-          </select>
-        </Field>
+      <div className="relative mx-auto max-w-5xl rounded-2xl bg-white/95 backdrop-blur-lg p-8 shadow-xl border border-indigo-100">
+        <h2 className="mb-6 text-3xl font-bold text-indigo-900">Identity Documents</h2>
 
-        {identityTypes
-          .filter((doc) => doc.is_mandatory)
-          .map((doc) => (
-            <Field
-              key={doc.identity_type_uuid}
-              label={`${doc.identity_type_name} *`}
+        {error && <ErrorAlert message={error} onClose={() => setError("")} />}
+
+        <div className="space-y-6">
+          <FormField label="Issuing Country" required className="max-w-md">
+            <SelectInput
+              value={selectedCountry}
+              onChange={(e) => {
+                setDraft({
+                  country_uuid: e.target.value,
+                  documents: [],
+                });
+                setOriginalDraft(null);
+                snapshotDoneRef.current = false;
+              }}
+              placeholder="Select Country"
             >
-              {/* 🔹 Identity File Number */}
-              <input
-                type="text"
-                placeholder={`${doc.identity_type_name} Number`}
-                value={
-                  documents.find(
-                    (d) => d.identity_type_uuid === doc.identity_type_uuid,
-                  )?.identity_file_number || ""
-                }
-                onChange={(e) =>
-                  handleIdentityNumberChange(doc, e.target.value)
-                }
-                style={{ ...inputStyle, marginBottom: 8 }}
-              />
+              {countries.map((c) => (
+                <option key={c.country_uuid} value={c.country_uuid}>
+                  {c.country_name}
+                </option>
+              ))}
+            </SelectInput>
+          </FormField>
 
-              {/* 🔹 File Upload */}
-              <div style={fileOuterBox}>
-                <label style={chooseFileBtn}>
-                  Choose File
-                  <input
-                    type="file"
-                    hidden
-                    onChange={(e) => handleFileChange(doc, e.target.files?.[0])}
-                  />
-                </label>
-                <span style={fileNameText}>
-                  {(() => {
-                    const existing = documents.find(
-                      (d) => d.identity_type_uuid === doc.identity_type_uuid,
-                    );
-                    if (isBrowserFile(existing?.file)) return existing.file.name;
-                    if (existing?.file_path) {
-                      return existing.file_path.split("/").pop() || "Uploaded file";
-                    }
-                    return "No file chosen";
-                  })()}
-                </span>
-              </div>
+          {selectedCountry && identityTypes.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-indigo-100">
+              {identityTypes
+                .filter((doc) => doc.is_mandatory)
+                .map((doc) => {
+                  const currentDoc = documents.find(
+                    (d) => d.identity_type_uuid === doc.identity_type_uuid
+                  );
+                  const hasFile = isBrowserFile(currentDoc?.file) || currentDoc?.file_path;
+                  const fileName = isBrowserFile(currentDoc?.file) 
+                    ? currentDoc.file.name 
+                    : currentDoc?.file_path?.split("/").pop() || "Uploaded file";
 
-              {documents.some(
-                (d) => d.identity_type_uuid === doc.identity_type_uuid,
-              ) && (
-                <div style={{ fontSize: 12, color: "green", marginTop: 4 }}>
-                  
-                </div>
-              )}
-            </Field>
-          ))}
+                  return (
+                    <div key={doc.identity_type_uuid} className="p-4 rounded-xl border border-indigo-50 bg-indigo-50/30 space-y-4">
+                      <h4 className="font-semibold text-indigo-900 flex items-center justify-between">
+                        {doc.identity_type_name}
+                        {doc.is_mandatory && <span className="text-xs font-normal text-indigo-500">(Mandatory)</span>}
+                      </h4>
+                      
+                      <FormField label={`${doc.identity_type_name} Number`} required error={fieldErrors[doc.identity_type_uuid]}>
+                        <TextInput
+                          placeholder={`Enter ${doc.identity_type_name} Number`}
+                          value={currentDoc?.identity_file_number || ""}
+                          onChange={(e) => handleIdentityNumberChange(doc, e.target.value)}
+                          error={fieldErrors[doc.identity_type_uuid] ? "true" : ""}
+                        />
+                      </FormField>
 
-        {error && <div style={{ color: "red" }}>{error}</div>}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-indigo-900">Upload Document</label>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <label className="flex items-center justify-center px-4 py-2 bg-indigo-600 text-white rounded-lg cursor-pointer hover:bg-indigo-700 transition-colors text-sm font-medium shadow-sm">
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M16 16l-4-4m0 0l-4 4m4-4v12" />
+                            </svg>
+                            Choose File
+                            <input
+                              type="file"
+                              className="hidden"
+                              onChange={(e) => handleFileChange(doc, e.target.files?.[0])}
+                            />
+                          </label>
+                          
+                          {hasFile && (
+                            <button
+                              type="button"
+                              onClick={() => openDocumentInNewTab(isBrowserFile(currentDoc?.file) ? currentDoc.file : undefined, currentDoc?.file_path)}
+                              className="flex items-center px-3 py-2 text-indigo-700 bg-indigo-100 hover:bg-indigo-200 rounded-lg transition-colors text-sm font-medium"
+                            >
+                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                              View
+                            </button>
+                          )}
+                        </div>
+                        {hasFile ? (
+                          <p className="text-xs text-indigo-600 truncate max-w-xs">{fileName}</p>
+                        ) : fieldErrors[doc.identity_type_uuid + "_file"] ? (
+                          <p className="text-xs text-red-500">{fieldErrors[doc.identity_type_uuid + "_file"]}</p>
+                        ) : (
+                          <p className="text-xs text-gray-500">No file chosen (Max 5MB)</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
 
-        <div style={footer}>
-          <button
-            type="button"
-            onClick={() => router.push(`/onboarding/${token}/address-details`)}
-            style={backBtn}
-          >
-            ← Back
-          </button>
+          {selectedCountry && identityTypes.length === 0 && (
+            <div className="text-center py-12 bg-indigo-50/30 rounded-2xl border border-dashed border-indigo-200">
+              <p className="text-indigo-600 italic">No identity documents required for this country.</p>
+            </div>
+          )}
 
-          <button onClick={handleContinue} style={submitBtn}>
-            Save & Continue
-          </button>
+          {!selectedCountry && (
+            <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+              <p className="text-gray-500 italic">Please select a country to view required documents.</p>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-4 pt-6 border-t border-indigo-100">
+            <Button
+              variant="secondary"
+              onClick={() => router.push(`/onboarding/${token}/address-details`)}
+            >
+              Back
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleContinue}
+              loading={loading}
+              disabled={loading || !selectedCountry}
+            >
+              {loading ? "Saving..." : "Save & Continue"}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
-
-/* ===================== FIELD ===================== */
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <label style={labelStyle}>{label}</label>
-      {children}
-    </div>
-  );
-}
-
-/* ===================== STYLES ===================== */
-
-const pageWrapper = {
-  padding: "32px 0",
-  background: "#f5f7fb",
-  minHeight: "100vh",
-};
-
-const cardStyle = {
-  maxWidth: 600,
-  margin: "auto",
-  background: "#fff",
-  padding: 24,
-  borderRadius: 8,
-};
-
-const titleStyle = {
-  fontSize: 20,
-  fontWeight: 600,
-  marginBottom: 24,
-};
-
-const labelStyle = {
-  display: "block",
-  marginBottom: 6,
-  fontSize: 14,
-  fontWeight: 500,
-};
-
-const inputStyle = {
-  width: "100%",
-  height: 44,
-  borderRadius: 8,
-  border: "1px solid #d1d5db",
-  padding: "0 12px",
-};
-
-const footer = {
-  display: "flex",
-  justifyContent: "space-between",
-  marginTop: 24,
-};
-
-const submitBtn = {
-  background: "#2563eb",
-  color: "#fff",
-  padding: "10px 20px",
-  borderRadius: 6,
-  border: "none",
-};
-
-const backBtn = {
-  background: "#e5e7eb",
-  color: "#000",
-  padding: "10px 20px",
-  borderRadius: 6,
-  border: "none",
-};
-
-const fileOuterBox = {
-  display: "flex",
-  alignItems: "center",
-  width: "100%",
-  height: 40,
-  border: "1px solid #000",
-  borderRadius: 4,
-  padding: "0 8px",
-  backgroundColor: "#fff",
-};
-
-const chooseFileBtn = {
-  border: "1px solid #9ca3af",
-  padding: "4px 10px",
-  borderRadius: 4,
-  cursor: "pointer",
-  fontSize: 14,
-  backgroundColor: "#fff",
-  whiteSpace: "nowrap",
-};
-
-const fileNameText = {
-  marginLeft: 12,
-  fontSize: 14,
-  color: "#374151",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
