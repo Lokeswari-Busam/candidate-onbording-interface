@@ -29,7 +29,7 @@ buildFrontendPipelineForNextjs([
     // ── Optional ──────────────────────────────────────────────────────────────
     cloudfrontDomain: 'd7sexzz68om8a.cloudfront.net',
     sonarProjectKey : 'intranet-candidate-onboarding-interface',
-    // nodeVersion     : 'NodeJS-22',
+    nodeVersion     : 'NodeJS-22',
     awsRegion       : 'ap-south-1',
     buildDir        : 'out',
 ])
