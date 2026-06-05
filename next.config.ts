@@ -1,7 +1,11 @@
+const isProd = process.env.NODE_ENV === 'production';
+
 const nextConfig = {
   productionBrowserSourceMaps: false,
-  output: 'export',
-  trailingSlash: true,
+  ...(isProd && {
+    output: 'export',
+    trailingSlash: true,
+  }),
 };
 
 export default nextConfig;
