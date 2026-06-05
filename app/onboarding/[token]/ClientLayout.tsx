@@ -2,7 +2,9 @@
 
 import OnboardingSidebar from "@/app/components/onboarding/OnboardingSidebar";
 import OnboardingHeader from "@/app/components/onboarding/OnboardingHeader";
-import { usePathname } from "next/navigation";
+import { usePathname, useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { API_CONFIG } from "@/app/utils/apiConfig";
 
 export default function ClientLayout({
   children,
@@ -10,6 +12,43 @@ export default function ClientLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const params = useParams();
+  const router = useRouter();
+  const token = params?.token as string | undefined;
+  const [tokenValid, setTokenValid] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+
+    const cacheKey = `token-verified-${token}`;
+    if (sessionStorage.getItem(cacheKey) === "true") {
+      setTokenValid(true);
+      return;
+    }
+
+    fetch(`${API_CONFIG.EMPLOYEE_ONBOARDING_URL}/token-verification/verify_token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_token: token }),
+    })
+      .then((res) => {
+        if (res.ok) {
+          sessionStorage.setItem(cacheKey, "true");
+          setTokenValid(true);
+        } else {
+          router.replace("/");
+        }
+      })
+      .catch(() => router.replace("/"));
+  }, [token, router]);
+
+  if (tokenValid === null) {
+    return (
+      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <p style={{ fontSize: 16, color: "#64748b" }}>Verifying onboarding link…</p>
+      </div>
+    );
+  }
   const isWelcomePage = pathname.endsWith("/welcome");
   const isSuccessPage = pathname.endsWith("/success");
 
