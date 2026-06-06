@@ -21,7 +21,6 @@ export default function OnboardingLayout({
   const [isValid, setIsValid] = useState<boolean | null>(
     token ? null : false
   );
-console.log("OnboardingLayout token:", token);
   useEffect(() => {
     // ⛔ No token → nothing to verify
     if (!token) return;

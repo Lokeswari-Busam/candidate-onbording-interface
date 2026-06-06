@@ -30,6 +30,8 @@ function OnboardingEntryContent() {
         );
 
         if (res.ok) {
+          // Cache so ClientLayout skips a redundant verify call on first page
+          sessionStorage.setItem(`token-verified-${token}`, "true");
           router.replace(`/onboarding/${token}/welcome`);
         } else {
           setStatus("invalid");
