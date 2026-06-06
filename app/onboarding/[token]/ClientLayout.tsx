@@ -53,14 +53,13 @@ export default function ClientLayout({
       </div>
     );
   }
-  const isWelcomePage = pathname.endsWith("/welcome");
-  const isSuccessPage = pathname.endsWith("/success");
+  // trailingSlash: true in next.config adds a trailing / to all paths.
+  // Use regex with optional trailing slash instead of endsWith().
+  const isWelcomePage = /\/welcome\/?$/.test(pathname);
+  const isSuccessPage = /\/success\/?$/.test(pathname);
 
-  /* Welcome page and OTP/email page both render without the chrome */
-  const isFullscreenPage =
-    isWelcomePage ||
-    isSuccessPage ||
-    /\/onboarding\/[^/]+$/.test(pathname); /* matches /onboarding/[token] exactly */
+  /* Welcome and success pages render without the sidebar/header chrome */
+  const isFullscreenPage = isWelcomePage || isSuccessPage;
 
   if (isFullscreenPage) {
     return <>{children}</>;
