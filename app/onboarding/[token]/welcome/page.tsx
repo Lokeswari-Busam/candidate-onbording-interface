@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter, useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useOnboardingToken } from "@/app/hooks/useOnboardingToken";
 import Image from "next/image";
 import { useRef, useEffect } from "react";
 
@@ -210,7 +211,7 @@ function DotCanvas() {
 /* ── Page ── */
 export default function WelcomePage() {
   const router = useRouter();
-  const { token } = useParams<{ token: string }>();
+  const token = useOnboardingToken();
 
   const handleStart = () => {
     localStorage.setItem(`onboarding-welcome-seen-${token}`, "true");

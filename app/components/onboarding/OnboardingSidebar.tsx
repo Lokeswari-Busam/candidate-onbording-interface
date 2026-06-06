@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useRouter, useParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useOnboardingToken } from "@/app/hooks/useOnboardingToken";
 import Image from "next/image";
 import { steps } from "./steps";
 import { getCompletedSteps } from "./onboardingCompletion";
@@ -9,7 +10,7 @@ import { getCompletedSteps } from "./onboardingCompletion";
 export default function OnboardingSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { token } = useParams<{ token: string }>();
+  const token = useOnboardingToken();
   const [completedSteps, setCompletedSteps] = useState<boolean[]>(
     () => steps.map(() => false)
   );

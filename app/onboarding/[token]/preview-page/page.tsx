@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useOnboardingToken } from "@/app/hooks/useOnboardingToken";
 import toast from "react-hot-toast";
 import { useLocalStorageForm } from "../hooks/localStorage";
 import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
@@ -127,7 +128,7 @@ const DOCUMENT_LABELS: Record<string, string> = {
 };
 
 export default function OnboardingPreviewPage() {
-  const { token } = useParams<{ token: string }>();
+  const token = useOnboardingToken();
   const router = useRouter();
 
   const [confirmed, setConfirmed] = useState(false);

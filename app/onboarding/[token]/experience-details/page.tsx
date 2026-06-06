@@ -1,6 +1,7 @@
 "use client";
 
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useOnboardingToken } from "@/app/hooks/useOnboardingToken";
 import { ChangeEvent, useEffect, useState } from "react";
 import { useLocalStorageForm } from "../hooks/localStorage";
 import { toast } from "react-hot-toast";
@@ -74,7 +75,7 @@ const isExperienceSame = (
 export default function ExperienceDetailsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { token } = useParams<{ token: string }>();
+  const token = useOnboardingToken();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { setLoading: setGlobalLoading } = useGlobalLoading();

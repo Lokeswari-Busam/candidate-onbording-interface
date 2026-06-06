@@ -1,6 +1,7 @@
 "use client";
 
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useOnboardingToken } from "@/app/hooks/useOnboardingToken";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "react-hot-toast";
 import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
@@ -84,7 +85,7 @@ export default function BankPfDetailsPage() {
 
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { token } = useParams<{ token: string }>();
+  const token = useOnboardingToken();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
