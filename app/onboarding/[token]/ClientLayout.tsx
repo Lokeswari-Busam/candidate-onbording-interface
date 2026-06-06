@@ -26,11 +26,9 @@ export default function ClientLayout({
       return;
     }
 
-    fetch(`${API_CONFIG.EMPLOYEE_ONBOARDING_URL}/token-verification/verify_token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ raw_token: token }),
-    })
+    // GET endpoint is non-destructive (safe to call multiple times).
+    // POST /verify_token marks the token as initiated and returns 500 on repeat calls.
+    fetch(`${API_CONFIG.EMPLOYEE_ONBOARDING_URL}/token-verification/${token}`)
       .then((res) => {
         if (res.ok) {
           sessionStorage.setItem(cacheKey, "true");
