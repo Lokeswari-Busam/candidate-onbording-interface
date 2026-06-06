@@ -57,9 +57,11 @@ export default function ClientLayout({
   // Use regex with optional trailing slash instead of endsWith().
   const isWelcomePage = /\/welcome\/?$/.test(pathname);
   const isSuccessPage = /\/success\/?$/.test(pathname);
+  // OTP page is the [token] root segment — /onboarding/<token> or /onboarding/<token>/
+  const isOtpPage = /\/onboarding\/[^/]+\/?$/.test(pathname);
 
-  /* Welcome and success pages render without the sidebar/header chrome */
-  const isFullscreenPage = isWelcomePage || isSuccessPage;
+  /* Welcome, OTP, and success pages render without the sidebar/header chrome */
+  const isFullscreenPage = isWelcomePage || isSuccessPage || isOtpPage;
 
   if (isFullscreenPage) {
     return <>{children}</>;

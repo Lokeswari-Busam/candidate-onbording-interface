@@ -31,8 +31,14 @@ body {
 }
 
 /* ══════════════════════════════════════════════
-   ONBOARDING FORM PAGES — Strip outer white card
+   ONBOARDING FORM PAGES — Polished card container
    ══════════════════════════════════════════════ */
+
+/* Comfortable reading width for the form column */
+.ob-content {
+  width: 100% !important;
+  max-width: 860px !important;
+}
 
 /* 1. Remove padding from the py-4 wrapper */
 .ob-content > .py-4 {
@@ -40,13 +46,15 @@ body {
   padding-bottom: 0 !important;
 }
 
-/* 2. Turn the big white card transparent */
+/* 2. The main card — clean white surface, soft elevation */
 .ob-content > .py-4 > div:first-child {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-  border-radius: 0 !important;
+  background: #ffffff !important;
+  border: 1px solid #eaeef4 !important;
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.04),
+    0 12px 28px -16px rgba(16, 24, 40, 0.18) !important;
+  border-radius: 18px !important;
+  padding: 28px 30px !important;
 }
 
 /* ══════════════════════════════════════════════
@@ -55,7 +63,7 @@ body {
 
 /* 3. Main page h2 heading */
 .ob-content > .py-4 > div:first-child > div:first-child h2 {
-  font-size: 1rem !important;         /* 16px — tighter, more enterprise */
+  font-size: 19px !important;
   font-weight: 700 !important;
   color: #0f172a !important;
   letter-spacing: -0.02em !important;
@@ -64,7 +72,7 @@ body {
 
 /* 4. Page subtitle / description */
 .ob-content > .py-4 > div:first-child > div:first-child p {
-  font-size: 12.5px !important;
+  font-size: 13px !important;
   color: #64748b !important;
   margin-top: 4px !important;
   line-height: 1.55 !important;
@@ -77,9 +85,9 @@ body {
 
 /* 6. Page header divider row */
 .ob-content > .py-4 > div:first-child > div.flex:first-child {
-  margin-bottom: 20px !important;
-  padding-bottom: 16px !important;
-  border-bottom: 1px solid #e2e8f0 !important;
+  margin-bottom: 24px !important;
+  padding-bottom: 18px !important;
+  border-bottom: 1px solid #eef1f6 !important;
 }
 
 /* ══════════════════════════════════════════════
@@ -89,8 +97,8 @@ body {
 /* 7. Sub-section headings (Emergency Contact, Offer Info, etc.) */
 .ob-content h3[class*="text-[#1e3a8a]"],
 .ob-content h3[class*="text-indigo"] {
-  font-size: 13px !important;
-  font-weight: 600 !important;
+  font-size: 14px !important;
+  font-weight: 650 !important;
   color: #1e293b !important;
   letter-spacing: -0.01em !important;
 }
@@ -99,39 +107,55 @@ body {
 .ob-content .border-t.border-indigo-200,
 .ob-content .border-t.border-indigo-100,
 .ob-content .border-b.border-indigo-200,
-.ob-content .border-b.border-indigo-100 {
-  border-color: #e2e8f0 !important;
+.ob-content .border-b.border-indigo-100,
+.ob-content .border-b {
+  border-color: #eef1f6 !important;
 }
 
-/* 9. Offer info block — modernise */
+/* 9. Offer info block — soft indigo info card with left accent */
 .ob-content .bg-gradient-to-r.from-indigo-50 {
-  background: #f8fafc !important;
-  border-color: #e2e8f0 !important;
+  background: linear-gradient(180deg, #f7f8ff, #f9fafe) !important;
+  border: 1px solid #e6e8fb !important;
+  border-left: 3px solid #6366f1 !important;
+  border-radius: 14px !important;
+  padding: 18px 20px !important;
 }
 .ob-content .bg-gradient-to-r.from-indigo-50 h3 {
   font-size: 13px !important;
-  font-weight: 600 !important;
-  color: #1e293b !important;
+  font-weight: 650 !important;
+  color: #312e81 !important;
 }
 .ob-content .bg-gradient-to-r.from-indigo-50 p[class*="text-indigo"] {
   color: #6366f1 !important;
-  font-size: 11px !important;
-  font-weight: 500 !important;
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
   text-transform: uppercase !important;
-  letter-spacing: 0.04em !important;
+  letter-spacing: 0.05em !important;
 }
 .ob-content .bg-gradient-to-r.from-indigo-50 p[class*="font-semibold"],
 .ob-content .bg-gradient-to-r.from-indigo-50 p[class*="text-gray-900"] {
   color: #0f172a !important;
-  font-size: 13.5px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  margin-top: 2px !important;
 }
 
 /* 10. Action button row at bottom of form pages */
 .ob-content .flex.justify-end.gap-4.pt-4.border-t,
-.ob-content .flex.justify-end.gap-4.pt-6.border-t {
-  border-top-color: #e2e8f0 !important;
-  margin-top: 8px !important;
-  padding-top: 16px !important;
+.ob-content .flex.justify-end.gap-4.pt-6.border-t,
+.ob-content .flex.justify-between.items-center.pt-8.border-t {
+  border-top-color: #eef1f6 !important;
+  margin-top: 12px !important;
+  padding-top: 18px !important;
+}
+
+/* 11. Field labels — refined uppercase caption style */
+.ob-content label.text-xs.font-semibold.uppercase,
+.ob-content label[class*="uppercase"][class*="tracking"] {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em !important;
+  color: #64748b !important;
 }
 
 /* ── Scrollbar ── */

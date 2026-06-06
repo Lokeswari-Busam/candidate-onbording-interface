@@ -102,8 +102,6 @@ export default function Page() {
       });
       const data = await res.json();
 
-      console.log("VERIFY OTP RESPONSE:", data);
-
       if (
         !res.ok ||
         data?.success === false ||
