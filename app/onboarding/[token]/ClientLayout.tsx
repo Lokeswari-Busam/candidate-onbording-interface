@@ -2,7 +2,7 @@
 
 import OnboardingSidebar from "@/app/components/onboarding/OnboardingSidebar";
 import OnboardingHeader from "@/app/components/onboarding/OnboardingHeader";
-import { usePathname, useParams, useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { API_CONFIG } from "@/app/utils/apiConfig";
 
@@ -12,13 +12,19 @@ export default function ClientLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const params = useParams();
   const router = useRouter();
-  const token = params?.token as string | undefined;
   const [tokenValid, setTokenValid] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (!token) return;
+    // IMPORTANT: Do NOT use useParams() here. When Next.js fetches the RSC
+    // payload for client-side navigation, CloudFront rewrites the request to
+    // /onboarding/__/... so the pre-built payload has token='__'. useParams()
+    // reads that payload and returns '__' instead of the real token.
+    // window.location.pathname always reflects the actual browser URL.
+    const match = window.location.pathname.match(/^\/onboarding\/([^/]+)/);
+    const token = match?.[1];
+
+    if (!token || token === '__') return;
 
     const cacheKey = `token-verified-${token}`;
     if (sessionStorage.getItem(cacheKey) === "true") {
@@ -38,7 +44,7 @@ export default function ClientLayout({
         }
       })
       .catch(() => router.replace("/"));
-  }, [token, router]);
+  }, [pathname, router]);
 
   if (tokenValid === null) {
     return (
