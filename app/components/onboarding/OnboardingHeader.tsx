@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { usePathname, useRouter, useParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useOnboardingToken } from "@/app/hooks/useOnboardingToken";
 import { steps } from "./steps";
 import { getCompletedSteps } from "./onboardingCompletion";
 
 export default function OnboardingHeader() {
   const pathname = usePathname();
   const router = useRouter();
-  const { token } = useParams<{ token: string }>();
+  const token = useOnboardingToken();
 
   const maxStepRef = useRef(0);
   const [completedSteps, setCompletedSteps] = useState<boolean[]>(

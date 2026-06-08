@@ -2,14 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useOnboardingToken } from "@/app/hooks/useOnboardingToken";
 import { toast } from "react-toastify";
 import { API_CONFIG } from "@/app/utils/apiConfig";
 
 export default function Page() {
   const router = useRouter();
-  const params = useParams();
-  const token = params.token as string;
+  const token = useOnboardingToken();
 
   const [step, setStep] = useState<number>(1);
   const [email, setEmail] = useState<string>("");
@@ -101,8 +101,6 @@ export default function Page() {
         body: JSON.stringify({ email, otp: otpValue }),
       });
       const data = await res.json();
-
-      console.log("VERIFY OTP RESPONSE:", data);
 
       if (
         !res.ok ||

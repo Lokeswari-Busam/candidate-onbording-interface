@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useOnboardingToken } from "@/app/hooks/useOnboardingToken";
 import { useLocalStorageForm } from "../hooks/localStorage";
 import toast from "react-hot-toast";
 import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
@@ -48,7 +49,7 @@ const isBrowserFile = (value: unknown): value is File =>
 /* ===================== COMPONENT ===================== */
 
 export default function IdentityDocumentsPage() {
-  const { token } = useParams<{ token: string }>();
+  const token = useOnboardingToken();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { setLoading: setGlobalLoading } = useGlobalLoading();

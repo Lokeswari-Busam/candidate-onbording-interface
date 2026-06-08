@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useOnboardingToken } from "@/app/hooks/useOnboardingToken";
 import { toast } from "react-hot-toast";
 import { useLocalStorageForm } from "../hooks/localStorage";
 import { useGlobalLoading } from "../../../components/onboarding/LoadingContext";
@@ -29,7 +30,7 @@ import { ErrorAlert } from "@/app/components/onboarding/AlertsComponents";
 import { API_CONFIG } from "@/app/utils/apiConfig";
 
 export default function EducationDetailsPage() {
-  const { token } = useParams<{ token: string }>();
+  const token = useOnboardingToken();
   const router = useRouter();
   const searchParams = useSearchParams();
 

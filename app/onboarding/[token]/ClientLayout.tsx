@@ -2,7 +2,7 @@
 
 import OnboardingSidebar from "@/app/components/onboarding/OnboardingSidebar";
 import OnboardingHeader from "@/app/components/onboarding/OnboardingHeader";
-import { usePathname, useParams, useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { API_CONFIG } from "@/app/utils/apiConfig";
 
@@ -12,13 +12,19 @@ export default function ClientLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const params = useParams();
   const router = useRouter();
-  const token = params?.token as string | undefined;
   const [tokenValid, setTokenValid] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (!token) return;
+    // IMPORTANT: Do NOT use useParams() here. When Next.js fetches the RSC
+    // payload for client-side navigation, CloudFront rewrites the request to
+    // /onboarding/__/... so the pre-built payload has token='__'. useParams()
+    // reads that payload and returns '__' instead of the real token.
+    // window.location.pathname always reflects the actual browser URL.
+    const match = window.location.pathname.match(/^\/onboarding\/([^/]+)/);
+    const token = match?.[1];
+
+    if (!token || token === '__') return;
 
     const cacheKey = `token-verified-${token}`;
     if (sessionStorage.getItem(cacheKey) === "true") {
@@ -26,11 +32,9 @@ export default function ClientLayout({
       return;
     }
 
-    fetch(`${API_CONFIG.EMPLOYEE_ONBOARDING_URL}/token-verification/verify_token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ raw_token: token }),
-    })
+    // GET endpoint is non-destructive (safe to call multiple times).
+    // POST /verify_token marks the token as initiated and returns 500 on repeat calls.
+    fetch(`${API_CONFIG.EMPLOYEE_ONBOARDING_URL}/token-verification/${token}`)
       .then((res) => {
         if (res.ok) {
           sessionStorage.setItem(cacheKey, "true");
@@ -40,7 +44,7 @@ export default function ClientLayout({
         }
       })
       .catch(() => router.replace("/"));
-  }, [token, router]);
+  }, [pathname, router]);
 
   if (tokenValid === null) {
     return (
@@ -49,14 +53,15 @@ export default function ClientLayout({
       </div>
     );
   }
-  const isWelcomePage = pathname.endsWith("/welcome");
-  const isSuccessPage = pathname.endsWith("/success");
+  // trailingSlash: true in next.config adds a trailing / to all paths.
+  // Use regex with optional trailing slash instead of endsWith().
+  const isWelcomePage = /\/welcome\/?$/.test(pathname);
+  const isSuccessPage = /\/success\/?$/.test(pathname);
+  // OTP page is the [token] root segment — /onboarding/<token> or /onboarding/<token>/
+  const isOtpPage = /\/onboarding\/[^/]+\/?$/.test(pathname);
 
-  /* Welcome page and OTP/email page both render without the chrome */
-  const isFullscreenPage =
-    isWelcomePage ||
-    isSuccessPage ||
-    /\/onboarding\/[^/]+$/.test(pathname); /* matches /onboarding/[token] exactly */
+  /* Welcome, OTP, and success pages render without the sidebar/header chrome */
+  const isFullscreenPage = isWelcomePage || isSuccessPage || isOtpPage;
 
   if (isFullscreenPage) {
     return <>{children}</>;
