@@ -2,6 +2,9 @@ const isProd = process.env.NODE_ENV === 'production';
 
 const nextConfig = {
   productionBrowserSourceMaps: false,
+  images: {
+    unoptimized: true,
+  },
   ...(isProd && {
     output: 'export',
     trailingSlash: true,
