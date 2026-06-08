@@ -193,7 +193,7 @@ export default function BankPfDetailsPage() {
 
       const bankEndpoint = meta.bank_uuid
         ? `${API_CONFIG.EMPLOYEE_ONBOARDING_URL}/bank/${meta.bank_uuid}`
-        : `${API_CONFIG.EMPLOYEE_ONBOARDING_URL}/bank`;
+        : `${API_CONFIG.EMPLOYEE_ONBOARDING_URL}/bank/`;
 
       const bankMethod = meta.bank_uuid ? "PUT" : "POST";
 
@@ -227,7 +227,7 @@ export default function BankPfDetailsPage() {
 
       const pfEndpoint = meta.pf_uuid
         ? `${API_CONFIG.EMPLOYEE_ONBOARDING_URL}/pf/${meta.pf_uuid}`
-        : `${API_CONFIG.EMPLOYEE_ONBOARDING_URL}/pf`;
+        : `${API_CONFIG.EMPLOYEE_ONBOARDING_URL}/pf/`;
 
       const pfMethod = meta.pf_uuid ? "PUT" : "POST";
 
